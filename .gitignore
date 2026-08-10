@@ -1,0 +1,22 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Node (only if you add tooling later)
+node_modules/
+
+# Blender working files — keep source .blend out of the repo,
+# commit only the exported/optimised .glb in assets/models/
+*.blend
+*.blend1
+
+# Raw unoptimised downloads — never commit these, they are huge
+assets/raw/
+
+# Logs
+*.log

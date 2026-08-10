@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>ReefWatch AR — See coral bleaching in your own room</title>
+  <meta name="description" content="A browser-based AR experience that shows how Sri Lanka's coral reefs bleach as sea temperature rises. No app install needed.">
+  <meta name="theme-color" content="#04212B">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&family=Public+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Sunlight through water. Purely decorative. -->
+  <div class="caustics" aria-hidden="true">
+    <span class="beam beam-a"></span>
+    <span class="beam beam-b"></span>
+    <span class="beam beam-c"></span>
+  </div>
+
+  <main class="shell">
+
+    <header class="masthead">
+      <p class="eyebrow">Marine conservation &middot; Sri Lanka</p>
+
+      <h1 class="wordmark">
+        <span class="wordmark-line drain">Reef</span><span class="wordmark-line drain drain-late">Watch</span>
+        <span class="wordmark-tag">AR</span>
+      </h1>
+
+      <p class="thesis">
+        Coral loses its colour when the sea gets too warm. It is happening off
+        Trincomalee and Hikkaduwa, and almost nobody can see it happen.
+      </p>
+      <p class="thesis thesis-quiet">
+        This puts a reef on the floor in front of you, and lets today's real sea
+        temperature decide whether it lives.
+      </p>
+    </header>
+
+    <nav class="modes" aria-label="Choose a mode">
+
+      <a class="mode" href="marker.html">
+        <span class="mode-tech">Image tracking</span>
+        <span class="mode-name">Scan the card</span>
+        <span class="mode-copy">
+          Point your camera at the printed reef card. A single coral appears on it,
+          with fish. Tap the coral to watch it bleach.
+        </span>
+        <span class="mode-go" aria-hidden="true">Open</span>
+      </a>
+
+      <a class="mode" href="markerless.html">
+        <span class="mode-tech">Plane detection</span>
+        <span class="mode-name">Place a reef</span>
+        <span class="mode-copy">
+          Scan your floor and drop a whole reef section into the room. Live sea
+          temperature sets its colour. Move the slider to change the water.
+        </span>
+        <span class="mode-go" aria-hidden="true">Open</span>
+      </a>
+
+    </nav>
+
+    <section class="readout" aria-label="Data source">
+      <div class="readout-row">
+        <span class="readout-key">Site</span>
+        <span class="readout-val">Pigeon Island, Trincomalee</span>
+      </div>
+      <div class="readout-row">
+        <span class="readout-key">Position</span>
+        <span class="readout-val">8.72&deg;N &nbsp;81.21&deg;E</span>
+      </div>
+      <div class="readout-row">
+        <span class="readout-key">Sea surface</span>
+        <span class="readout-val readout-pending">awaiting live feed</span>
+      </div>
+    </section>
+
+    <footer class="footnote">
+      <p>
+        Built for INTE 42312 &mdash; Virtual and Augmented Reality.
+        Best on Android Chrome. Needs camera permission.
+      </p>
+      <p class="attrib">
+        Marine data from Open-Meteo, generated using data from the German Weather
+        Service (DWD), CC BY 4.0. 3D models under open licences &mdash; see CREDITS.
+      </p>
+    </footer>
+
+  </main>
+
+</body>
+</html>
