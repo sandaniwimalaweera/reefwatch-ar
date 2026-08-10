@@ -1,10 +1,8 @@
-# ReefWatch AR
-
 A browser-based augmented reality experience that shows how coral reefs lose
 their colour as sea temperature rises. Built for **INTE 42312 — Virtual and
 Augmented Reality**.
 
-**Live:** *(add your GitHub Pages URL here once it is deployed)*
+**Live:** https://sandaniwimalaweera.github.io/reefwatch-ar/
 
 ---
 
