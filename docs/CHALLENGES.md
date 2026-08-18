@@ -50,5 +50,10 @@ Fill this in on day 2. These numbers are direct evidence for the
 
 | Model | Original size | Original tris | Final size | Final tris | Technique |
 |---|---|---|---|---|---|
-| coral.glb | | | | | Decimate + 1K textures + Draco |
-| reef.glb | | | | | Decimate + 1K textures + Draco |
+| coral.glb | 87 KB (unpacked glTF + bin + textures) | — | 225 KB | — | GLB bundling + Draco compression |
+| reef.glb | (check raw folder size) | — | 433 KB | — | GLB bundling + Draco compression |
+
+Note: both GLB files are larger than the raw `.bin` mesh data because the GLB
+bundles mesh, materials and textures into a single binary. This trades a small
+size increase for one HTTP request instead of several, which loads faster on
+mobile data. Both models are well under the 2 MB target.
