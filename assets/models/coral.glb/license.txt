@@ -1,0 +1,11 @@
+Model Information:
+* title:	coral
+* source:	https://sketchfab.com/3d-models/coral-3f051742aa3b466fa3b8df9bb990d170
+* author:	JonathanFreire (https://sketchfab.com/JonathanFreire)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "coral" (https://sketchfab.com/3d-models/coral-3f051742aa3b466fa3b8df9bb990d170) by JonathanFreire (https://sketchfab.com/JonathanFreire) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -7,9 +7,11 @@ you download it — do not leave this until the end.
 ## 3D Models
 
 | Model | File | Author | Source | Licence |
+|| Model | File | Author | Source | Licence |
 |---|---|---|---|---|
-| Coral head | `assets/models/coral.glb` | *(fill in)* | *(Sketchfab URL)* | CC-BY 4.0 |
-| Reef section | `assets/models/reef.glb` | *(fill in)* | *(Sketchfab URL)* | CC-BY 4.0 |
+| Coral head | `assets/models/coral.glb` | rkuhlf | https://sketchfab.com/3d-models/coral-3f051742aa3b466fa3b8df9bb990d170 | CC-BY 4.0 |
+| Reef section | `assets/models/reef.glb` | rkuhlf | https://sketchfab.com/3d-models/coral-dbf4bee13bf84396815073e5cabf8ac3 | CC-BY 4.0 |
+| Fish | `assets/models/fish.glb` | (fill in later) | (fill in later) | (fill in later) |
 | Fish | `assets/models/fish.glb` | *(fill in)* | *(source URL)* | *(licence)* |
 
 ## Audio
