@@ -15,43 +15,54 @@
    ------------------------------------------------------------ */
 AFRAME.registerComponent('fit-to-card', {
   schema: {
-    size:  { type: 'number', default: 0.42 },
-    lift:  { type: 'number', default: 0.0 }
+    size: { type: 'number', default: 0.22 },
+    lift: { type: 'number', default: 0.0 }
   },
 
   init: function () {
+    // The model may already be attached by the time this component
+    // initialises — a-asset-item preloading makes that race real —
+    // so check for it as well as listening for the event.
     this.el.addEventListener('model-loaded', () => this.fit());
+    if (this.el.getObject3D('mesh')) this.fit();
   },
 
   fit: function () {
     const mesh = this.el.getObject3D('mesh');
-    if (!mesh) return;
+    if (!mesh || this.done) return;
 
-    // Measure at neutral scale, otherwise we compound previous fits.
-    this.el.object3D.scale.set(1, 1, 1);
-    this.el.object3D.updateMatrixWorld(true);
+    const obj = this.el.object3D;
 
+    // Measure at neutral transform, otherwise each fit compounds
+    // the last one.
+    obj.scale.set(1, 1, 1);
+    obj.position.set(0, 0, 0);
+    obj.updateMatrixWorld(true);
+
+    // setFromObject returns world space. Convert into this entity's
+    // local space so the numbers mean something we can act on.
     const box = new THREE.Box3().setFromObject(mesh);
+    const toLocal = new THREE.Matrix4().copy(obj.matrixWorld).invert();
+    box.applyMatrix4(toLocal);
+
     const span = new THREE.Vector3();
     box.getSize(span);
-
     const largest = Math.max(span.x, span.y, span.z);
     if (!largest || !isFinite(largest)) return;
 
     const factor = this.data.size / largest;
-    this.el.object3D.scale.setScalar(factor);
+    obj.scale.setScalar(factor);
 
-    // Recentre horizontally and sit the base on z = 0.
-    this.el.object3D.updateMatrixWorld(true);
-    const fitted = new THREE.Box3().setFromObject(mesh);
+    // Centre horizontally, then sit the base on the card surface.
     const centre = new THREE.Vector3();
-    fitted.getCenter(centre);
+    box.getCenter(centre);
 
-    this.el.object3D.position.x -= centre.x;
-    this.el.object3D.position.y -= centre.y;
-    this.el.object3D.position.z -= fitted.min.z - this.data.lift;
+    obj.position.x = -centre.x * factor;
+    obj.position.z = -centre.z * factor;
+    obj.position.y = -box.min.y * factor + this.data.lift;
 
-    this.el.emit('fitted', { factor: factor });
+    this.done = true;
+    this.el.emit('fitted', { factor: factor, span: span });
   }
 });
 

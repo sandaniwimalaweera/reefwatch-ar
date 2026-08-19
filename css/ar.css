@@ -28,6 +28,39 @@ html, body {
   background: #000;
 }
 
+/* ---------- Camera feed ----------
+   MindAR injects a <video> for the camera stream. On iOS Safari it
+   is sometimes left unsized or stacked behind an opaque canvas,
+   which shows as a black background with the model floating on it.
+   Pinning it explicitly and forcing the canvas transparent fixes it. */
+
+video {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  object-fit: cover !important;
+  z-index: 0 !important;
+  display: block !important;
+  opacity: 1 !important;
+}
+
+a-scene,
+a-scene .a-canvas,
+canvas.a-canvas {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: transparent !important;
+  z-index: 1 !important;
+}
+
+/* MindAR's own wrapper can force its own sizing — neutralise it. */
+.mindar-ui-overlay { display: none !important; }
+
 .ar-body {
   font-family: var(--body);
   color: var(--bone);
@@ -35,8 +68,7 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* A-Frame injects its own canvas — keep it behind the overlay */
-a-scene { z-index: 0; }
+/* Overlay chrome must sit above the canvas */
 
 /* ---------- Scanning prompt ---------- */
 
