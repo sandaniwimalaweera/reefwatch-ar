@@ -1,0 +1,231 @@
+/* ============================================================
+   ReefWatch AR — AR overlay chrome
+   Shared by marker.html and markerless.html.
+   Everything here floats above the camera feed, so contrast
+   and safe-area insets matter more than usual.
+   ============================================================ */
+
+:root {
+  --abyss:   #04212B;
+  --living:  #FF5E7D;
+  --algae:   #2ED9B4;
+  --bone:    #FFF4EA;
+  --warning: #FFB35C;
+
+  --display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --body:    "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono:    "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+
+.ar-body {
+  font-family: var(--body);
+  color: var(--bone);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A-Frame injects its own canvas — keep it behind the overlay */
+a-scene { z-index: 0; }
+
+/* ---------- Scanning prompt ---------- */
+
+.ar-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 50%, transparent 30%, rgba(4, 33, 43, 0.72) 100%);
+  transition: opacity 0.45s ease;
+}
+
+.ar-prompt.is-hidden { opacity: 0; }
+
+.ar-prompt-inner {
+  position: relative;
+  width: min(78vw, 300px);
+  aspect-ratio: 1 / 1.25;
+  border: 1px solid rgba(255, 244, 234, 0.35);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  padding: 1.1rem;
+  overflow: hidden;
+}
+
+/* Corner ticks — reads as a viewfinder rather than a plain box */
+.ar-prompt-inner::before,
+.ar-prompt-inner::after {
+  content: "";
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--algae);
+}
+.ar-prompt-inner::before {
+  top: -1px; left: -1px;
+  border-right: none;
+  border-bottom: none;
+}
+.ar-prompt-inner::after {
+  bottom: -1px; right: -1px;
+  border-left: none;
+  border-top: none;
+}
+
+.ar-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--algae), transparent);
+  box-shadow: 0 0 14px var(--algae);
+  animation: scan 2.6s ease-in-out infinite;
+}
+
+@keyframes scan {
+  0%, 100% { top: 6%;  opacity: 0.15; }
+  50%      { top: 92%; opacity: 0.9; }
+}
+
+.ar-prompt-title {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.ar-prompt-copy {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: rgba(255, 244, 234, 0.72);
+}
+
+.ar-prompt.is-error .ar-prompt-inner { border-color: var(--living); }
+.ar-prompt.is-error .ar-scanline { display: none; }
+
+/* ---------- Tap hint ---------- */
+
+.ar-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8.5rem);
+  transform: translate(-50%, 8px);
+  z-index: 25;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 244, 234, 0.28);
+  border-radius: 999px;
+  background: rgba(4, 33, 43, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.ar-hint.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ---------- Species card ---------- */
+
+.ar-card {
+  position: fixed;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  z-index: 22;
+  padding: 1rem 1.1rem 1.15rem;
+  border: 1px solid rgba(255, 244, 234, 0.16);
+  border-radius: 3px;
+  background: rgba(4, 33, 43, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  pointer-events: none;
+}
+
+.ar-card.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ar-card-eyebrow {
+  margin: 0 0 0.3rem;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--algae);
+  transition: color 0.4s ease;
+}
+
+.ar-card-eyebrow.is-warning { color: var(--warning); }
+
+.ar-card-name {
+  margin: 0 0 0.35rem;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.3rem;
+  letter-spacing: -0.02em;
+}
+
+.ar-card-copy {
+  margin: 0;
+  max-width: 46ch;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: rgba(255, 244, 234, 0.74);
+}
+
+/* ---------- Back link ---------- */
+
+.ar-back {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 0.9rem);
+  left: 0.9rem;
+  z-index: 30;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid rgba(255, 244, 234, 0.24);
+  border-radius: 999px;
+  background: rgba(4, 33, 43, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bone);
+  text-decoration: none;
+}
+
+.ar-back:active { background: rgba(14, 107, 126, 0.8); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ar-scanline { animation: none; top: 50%; }
+  .ar-prompt, .ar-card, .ar-hint { transition: none; }
+}

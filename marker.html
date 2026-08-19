@@ -2,16 +2,88 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Scan the card — ReefWatch AR</title>
-  <link rel="stylesheet" href="css/style.css">
+
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+  <link rel="stylesheet" href="css/ar.css">
 </head>
-<body>
-  <main class="shell">
-    <p class="eyebrow">Image tracking</p>
-    <h1 class="wordmark" style="font-size:clamp(2.4rem,10vw,3.4rem)">Scan the card</h1>
-    <p class="thesis">Not built yet. Marker tracking lands on day 2.</p>
-    <p><a class="mode-go" href="index.html">Back</a></p>
-  </main>
+<body class="ar-body">
+
+  <!-- Prompt shown until the marker is found -->
+  <div class="ar-prompt" id="prompt">
+    <div class="ar-prompt-inner">
+      <div class="ar-scanline" aria-hidden="true"></div>
+      <p class="ar-prompt-title">Point at the card</p>
+      <p class="ar-prompt-copy">Hold your phone about 30&nbsp;cm from the printed reef photo.</p>
+    </div>
+  </div>
+
+  <!-- Shown once the coral is on screen -->
+  <div class="ar-hint" id="hint" hidden>Tap the coral</div>
+
+  <!-- Species panel -->
+  <div class="ar-card" id="card" hidden>
+    <p class="ar-card-eyebrow" id="cardState">Healthy</p>
+    <p class="ar-card-name">Staghorn coral</p>
+    <p class="ar-card-copy" id="cardCopy">
+      Living tissue holds algae that feed the coral and give it its colour.
+    </p>
+  </div>
+
+  <a class="ar-back" href="index.html">Back</a>
+
+  <a-scene
+    mindar-image="imageTargetSrc: assets/targets/targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no; filterMinCF: 0.0001; filterBeta: 0.001"
+    color-space="sRGB"
+    embedded
+    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <a-assets>
+      <a-asset-item id="coralModel" src="assets/models/coral.glb"></a-asset-item>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse"></a-camera>
+
+    <a-entity id="target" mindar-image-target="targetIndex: 0">
+
+      <!-- Light rig travels with the target so the coral is lit consistently -->
+      <a-entity light="type: ambient; color: #BFE9F5; intensity: 0.85"></a-entity>
+      <a-entity light="type: directional; color: #FFFFFF; intensity: 0.9" position="1 2 1"></a-entity>
+      <a-entity light="type: directional; color: #7FD8FF; intensity: 0.35" position="-1 -0.5 0.5"></a-entity>
+
+      <!-- The coral. Adjust scale once you see it against the printed card. -->
+      <a-entity
+        id="coral"
+        gltf-model="#coralModel"
+        position="0 0 0.02"
+        rotation="0 0 0"
+        scale="0.25 0.25 0.25"
+        bleachable
+        tap-to-bleach
+        class="clickable">
+      </a-entity>
+
+      <!-- Fish orbit the coral. Each sits on a spinning pivot. -->
+      <a-entity id="school">
+        <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 9000; easing: linear">
+          <a-entity fish-body="hue: #FFB35C" position="0.34 0.12 0"></a-entity>
+        </a-entity>
+        <a-entity rotation="0 140 0" animation="property: rotation; to: 0 500 0; loop: true; dur: 12000; easing: linear">
+          <a-entity fish-body="hue: #6FE3D0" position="0.42 0.20 0"></a-entity>
+        </a-entity>
+        <a-entity rotation="0 260 0" animation="property: rotation; to: 0 620 0; loop: true; dur: 7500; easing: linear">
+          <a-entity fish-body="hue: #FF8FA8" position="0.28 0.26 0"></a-entity>
+        </a-entity>
+      </a-entity>
+
+    </a-entity>
+  </a-scene>
+
+  <script src="js/marker-scene.js"></script>
 </body>
 </html>
