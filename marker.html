@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Scan the card — ReefWatch AR</title>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Public+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
@@ -12,7 +16,7 @@
 </head>
 <body class="ar-body">
 
-  <!-- Prompt shown until the marker is found -->
+  <!-- Shown until the marker is found -->
   <div class="ar-prompt" id="prompt">
     <div class="ar-prompt-inner">
       <div class="ar-scanline" aria-hidden="true"></div>
@@ -21,10 +25,8 @@
     </div>
   </div>
 
-  <!-- Shown once the coral is on screen -->
   <div class="ar-hint" id="hint" hidden>Tap the coral</div>
 
-  <!-- Species panel -->
   <div class="ar-card" id="card" hidden>
     <p class="ar-card-eyebrow" id="cardState">Healthy</p>
     <p class="ar-card-name">Staghorn coral</p>
@@ -39,7 +41,7 @@
     mindar-image="imageTargetSrc: assets/targets/targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no; filterMinCF: 0.0001; filterBeta: 0.001"
     color-space="sRGB"
     embedded
-    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true"
+    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
 
@@ -51,36 +53,38 @@
 
     <a-entity id="target" mindar-image-target="targetIndex: 0">
 
-      <!-- Light rig travels with the target so the coral is lit consistently -->
-      <a-entity light="type: ambient; color: #BFE9F5; intensity: 0.85"></a-entity>
-      <a-entity light="type: directional; color: #FFFFFF; intensity: 0.9" position="1 2 1"></a-entity>
-      <a-entity light="type: directional; color: #7FD8FF; intensity: 0.35" position="-1 -0.5 0.5"></a-entity>
+      <!-- Everything below is rotated so the scene stands up off the card
+           rather than lying flat on it. -->
+      <a-entity rotation="-90 0 0">
 
-      <!-- The coral. Adjust scale once you see it against the printed card. -->
-      <a-entity
-        id="coral"
-        gltf-model="#coralModel"
-        position="0 0 0.02"
-        rotation="0 0 0"
-        scale="0.25 0.25 0.25"
-        bleachable
-        tap-to-bleach
-        class="clickable">
+        <!-- Light rig -->
+        <a-entity light="type: ambient; color: #9FD8EA; intensity: 0.7"></a-entity>
+        <a-entity light="type: directional; color: #FFFFFF; intensity: 0.85" position="0.6 1.4 0.8"></a-entity>
+        <a-entity light="type: directional; color: #5FC6F0; intensity: 0.4" position="-0.8 0.2 -0.6"></a-entity>
+        <a-entity caustic-light></a-entity>
+
+        <!-- The coral. fit-to-card sizes it automatically, so no
+             hand-tuned scale value is needed for a new model. -->
+        <a-entity
+          id="coral"
+          gltf-model="#coralModel"
+          fit-to-card="size: 0.34"
+          bleachable
+          tap-to-bleach
+          class="clickable">
+        </a-entity>
+
+        <!-- School. Each fish runs its own orbit, speed and phase. -->
+        <a-entity reef-fish="hue: #FFB35C; belly: #FFF0D8; radius: 0.19; height: 0.13; speed: 0.42; phase: 0.0;  length: 0.085"></a-entity>
+        <a-entity reef-fish="hue: #6FE3D0; belly: #E8FFFA; radius: 0.25; height: 0.22; speed: 0.31; phase: 2.1;  length: 0.10"></a-entity>
+        <a-entity reef-fish="hue: #FF8FA8; belly: #FFF0F3; radius: 0.15; height: 0.28; speed: 0.55; phase: 4.0;  length: 0.07"></a-entity>
+        <a-entity reef-fish="hue: #FFE066; belly: #FFFBE8; radius: 0.29; height: 0.09; speed: 0.26; phase: 1.2;  length: 0.075"></a-entity>
+        <a-entity reef-fish="hue: #8FB8FF; belly: #EFF5FF; radius: 0.13; height: 0.19; speed: 0.62; phase: 5.3;  length: 0.06"></a-entity>
+
+        <!-- Drifting particulate -->
+        <a-entity marine-snow="count: 80; spread: 0.85; top: 0.7"></a-entity>
+
       </a-entity>
-
-      <!-- Fish orbit the coral. Each sits on a spinning pivot. -->
-      <a-entity id="school">
-        <a-entity animation="property: rotation; to: 0 360 0; loop: true; dur: 9000; easing: linear">
-          <a-entity fish-body="hue: #FFB35C" position="0.34 0.12 0"></a-entity>
-        </a-entity>
-        <a-entity rotation="0 140 0" animation="property: rotation; to: 0 500 0; loop: true; dur: 12000; easing: linear">
-          <a-entity fish-body="hue: #6FE3D0" position="0.42 0.20 0"></a-entity>
-        </a-entity>
-        <a-entity rotation="0 260 0" animation="property: rotation; to: 0 620 0; loop: true; dur: 7500; easing: linear">
-          <a-entity fish-body="hue: #FF8FA8" position="0.28 0.26 0"></a-entity>
-        </a-entity>
-      </a-entity>
-
     </a-entity>
   </a-scene>
 
