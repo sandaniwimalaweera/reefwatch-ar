@@ -77,7 +77,11 @@
       </div>
       <div class="readout-row">
         <span class="readout-key">Sea surface</span>
-        <span class="readout-val readout-pending">awaiting live feed</span>
+        <span class="readout-val readout-pending" id="landingTemp">reading…</span>
+      </div>
+      <div class="readout-row">
+        <span class="readout-key">Reef status</span>
+        <span class="readout-val readout-pending" id="landingState">&mdash;</span>
       </div>
     </section>
 
@@ -88,11 +92,41 @@
       </p>
       <p class="attrib">
         Marine data from Open-Meteo, generated using data from the German Weather
-        Service (DWD), CC BY 4.0. 3D models under open licences &mdash; see CREDITS.
+        Service (DWD), CC BY 4.0. 3D models by rkuhlf via Sketchfab, CC BY 4.0.
       </p>
     </footer>
 
   </main>
 
+  <script src="js/api.js"></script>
+  <script>
+    /* The landing page shows the current reading before the user
+       enters AR, so the live-data link is visible immediately
+       rather than only once a reef has been placed. */
+    (function () {
+      var tempEl  = document.getElementById('landingTemp');
+      var stateEl = document.getElementById('landingState');
+
+      function classify (c) {
+        if (c < 29.0) return ['Healthy', '#2ED9B4'];
+        if (c < 30.0) return ['Watch', '#2ED9B4'];
+        if (c < 31.0) return ['Warning', '#FFB35C'];
+        return ['Bleaching', '#FF5E7D'];
+      }
+
+      window.ReefAPI.load().then(function (r) {
+        var source = !r.offline ? 'live' : (r.cached ? 'cached' : 'seasonal');
+        tempEl.textContent = r.celsius.toFixed(1) + ' \u00B0C \u00B7 ' + source;
+        tempEl.classList.remove('readout-pending');
+
+        var s = classify(r.celsius);
+        stateEl.textContent = s[0];
+        stateEl.style.color = s[1];
+        stateEl.classList.remove('readout-pending');
+      }).catch(function () {
+        tempEl.textContent = 'unavailable';
+      });
+    })();
+  </script>
 </body>
 </html>

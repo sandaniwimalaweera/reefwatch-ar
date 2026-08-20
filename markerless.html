@@ -15,6 +15,12 @@
 </head>
 <body class="ar-body xr-page">
 
+  <div class="loader" id="loader">
+    <p class="loader-label">Loading 0%</p>
+    <div class="loader-track"><div class="loader-fill"></div></div>
+  </div>
+
+
   <!-- DOM overlay: everything here stays on screen during the AR session -->
   <div id="overlay" class="xr-overlay">
 
@@ -30,6 +36,7 @@
         <p class="ar-gate-note" id="gateNote">Checking device capability…</p>
         <button class="ar-btn" id="start">Start</button>
         <a class="ar-gate-alt" href="index.html">Back</a>
+        <button class="credits-open" id="creditsOpen" type="button">Credits</button>
       </div>
     </div>
 
@@ -65,7 +72,48 @@
     </div>
 
     <a class="ar-back" href="index.html">Back</a>
+  <button class="ar-audio" id="audio" aria-label="Play ambience">
+    <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M11 5 6 9H2v6h4l5 4z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/>
+    </svg>
+    <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>
+    </svg>
+  </button>
   </div>
+
+  <!-- Attribution required by the licences of the data and models -->
+  <div class="credits" id="credits">
+    <div class="credits-sheet">
+      <h2>Credits</h2>
+
+      <h3>Marine data</h3>
+      <p>
+        Sea surface temperature from
+        <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>,
+        generated using data from the German Weather Service (DWD).
+        Licensed CC&nbsp;BY&nbsp;4.0.
+      </p>
+      <p>
+        The temperature-to-bleaching mapping is a simplified model for
+        visualisation. Real bleaching depends on heat stress accumulated
+        over weeks, not a single reading.
+      </p>
+
+      <h3>3D models</h3>
+      <p>Coral and reef models by rkuhlf, via Sketchfab, CC&nbsp;BY&nbsp;4.0.</p>
+
+      <h3>Libraries</h3>
+      <p>A-Frame and MindAR, both MIT licensed. Fish, particles and the
+         ambience are generated procedurally in code.</p>
+
+      <h3>Built for</h3>
+      <p>INTE 42312 — Virtual and Augmented Reality.</p>
+
+      <button class="credits-close">Close</button>
+    </div>
+  </div>
+
 
   <a-scene
     reef-state="celsius: 28"
@@ -138,6 +186,8 @@
 
   </a-scene>
 
+  <script src="js/ambience.js"></script>
+  <script src="js/ui.js"></script>
   <script src="js/lib-reef.js"></script>
   <script src="js/api.js"></script>
   <script src="js/xr-scene.js"></script>
