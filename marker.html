@@ -16,16 +16,15 @@
 </head>
 <body class="ar-body">
 
-  <!-- Shown until the marker is found -->
   <div class="ar-prompt" id="prompt">
     <div class="ar-prompt-inner">
       <div class="ar-scanline" aria-hidden="true"></div>
       <p class="ar-prompt-title">Point at the card</p>
-      <p class="ar-prompt-copy">Hold your phone about 30&nbsp;cm from the printed reef photo.</p>
+      <p class="ar-prompt-copy">Hold your phone above the printed photo and look down into it.</p>
     </div>
   </div>
 
-  <div class="ar-hint" id="hint" hidden>Tap the coral</div>
+  <div class="ar-hint" id="hint" hidden>Tap to warm the water</div>
 
   <div class="ar-card" id="card" hidden>
     <p class="ar-card-eyebrow" id="cardState">Healthy</p>
@@ -41,7 +40,7 @@
     mindar-image="imageTargetSrc: assets/targets/targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no; filterMinCF: 0.0001; filterBeta: 0.001"
     color-space="sRGB"
     embedded
-    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true"
+    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true; sortObjects: true"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
 
@@ -53,36 +52,37 @@
 
     <a-entity id="target" mindar-image-target="targetIndex: 0">
 
-      <!-- Everything below is rotated so the scene stands up off the card
-           rather than lying flat on it. -->
+      <!-- Rotated so that +Y is "up out of the card". Everything
+           below the card therefore sits at negative Y. -->
       <a-entity rotation="-90 0 0">
 
-        <!-- Light rig -->
-        <a-entity light="type: ambient; color: #9FD8EA; intensity: 0.7"></a-entity>
-        <a-entity light="type: directional; color: #FFFFFF; intensity: 0.85" position="0.6 1.4 0.8"></a-entity>
-        <a-entity light="type: directional; color: #5FC6F0; intensity: 0.4" position="-0.8 0.2 -0.6"></a-entity>
-        <a-entity caustic-light></a-entity>
+        <!-- The opening, its walls and sand floor -->
+        <a-entity portal-well="width: 0.78; depth: 0.46; drop: 0.54; rock: #123742; sand: #C6B99B"></a-entity>
 
-        <!-- The coral. fit-to-card sizes it automatically, so no
-             hand-tuned scale value is needed for a new model. -->
+        <!-- Light rig. Most of it points down into the well. -->
+        <a-entity light="type: ambient; color: #7FB8CC; intensity: 0.55"></a-entity>
+        <a-entity light="type: directional; color: #EAF8FF; intensity: 0.75" position="0.3 1.2 0.4"></a-entity>
+        <a-entity caustic-light="intensity: 0.6"></a-entity>
+
+        <!-- Coral, sitting on the sand at the bottom -->
         <a-entity
           id="coral"
           gltf-model="#coralModel"
-          fit-to-card="size: 0.22"
+          fit-in-well="size: 0.30; floor: -0.535"
           bleachable
-          tap-to-bleach
-          class="clickable">
+          tap-to-bleach>
         </a-entity>
 
-        <!-- School. Each fish runs its own orbit, speed and phase. -->
-        <a-entity reef-fish="hue: #FFB35C; belly: #FFF0D8; radius: 0.16; height: 0.09; speed: 0.42; phase: 0.0;  length: 0.085"></a-entity>
-        <a-entity reef-fish="hue: #6FE3D0; belly: #E8FFFA; radius: 0.20; height: 0.15; speed: 0.31; phase: 2.1;  length: 0.10"></a-entity>
-        <a-entity reef-fish="hue: #FF8FA8; belly: #FFF0F3; radius: 0.14; height: 0.20; speed: 0.55; phase: 4.0;  length: 0.07"></a-entity>
-        <a-entity reef-fish="hue: #FFE066; belly: #FFFBE8; radius: 0.23; height: 0.06; speed: 0.26; phase: 1.2;  length: 0.075"></a-entity>
-        <a-entity reef-fish="hue: #8FB8FF; belly: #EFF5FF; radius: 0.11; height: 0.13; speed: 0.62; phase: 5.3;  length: 0.06"></a-entity>
+        <!-- School, swimming inside the well volume -->
+        <a-entity reef-fish="hue: #FFB35C; radius: 0.24; depth: 0.13; level: -0.20; speed: 0.30; phase: 0.0; length: 0.058"></a-entity>
+        <a-entity reef-fish="hue: #6FE3D0; radius: 0.30; depth: 0.16; level: -0.31; speed: 0.22; phase: 2.1; length: 0.070"></a-entity>
+        <a-entity reef-fish="hue: #FF8FA8; radius: 0.19; depth: 0.10; level: -0.13; speed: 0.38; phase: 4.0; length: 0.048"></a-entity>
+        <a-entity reef-fish="hue: #FFE066; radius: 0.33; depth: 0.17; level: -0.42; speed: 0.18; phase: 1.2; length: 0.052"></a-entity>
+        <a-entity reef-fish="hue: #8FB8FF; radius: 0.15; depth: 0.09; level: -0.26; speed: 0.45; phase: 5.3; length: 0.042"></a-entity>
+        <a-entity reef-fish="hue: #FFA8E0; radius: 0.27; depth: 0.14; level: -0.38; speed: 0.26; phase: 3.4; length: 0.046"></a-entity>
 
-        <!-- Drifting particulate -->
-        <a-entity marine-snow="count: 70; spread: 0.7; top: 0.5"></a-entity>
+        <!-- Particulate drifting down through the water column -->
+        <a-entity marine-snow="count: 70; w: 0.72; d: 0.42; top: -0.02; drop: 0.5"></a-entity>
 
       </a-entity>
     </a-entity>

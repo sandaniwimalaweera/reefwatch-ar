@@ -1,28 +1,160 @@
 /* ============================================================
    ReefWatch AR — marker scene
-   Image tracking with MindAR. Tap the coral to bleach it.
+
+   The printed card is treated as an opening cut into the table
+   rather than a pedestal. A well descends beneath it, and an
+   occluder plane at the card surface hides everything outside
+   the opening, so the reef only shows through the hole.
    ============================================================ */
 
 /* ------------------------------------------------------------
-   fit-to-card
-   Source models come in wildly different units — one Sketchfab
-   export may be 0.2 units across, another 400. Hard-coding a
-   scale means re-tuning every time the model changes.
+   portal-well
 
-   This measures the loaded mesh's bounding box and scales it so
-   its largest dimension equals `size` (in card-widths), then
-   drops it so its base sits on the card surface.
+   The occlusion trick: draw a large plane at the card surface
+   with a rectangular hole in it. Its material writes depth but
+   no colour, and renders first. Anything below the card that
+   is not inside the hole fails the depth test and disappears.
+
+   The result reads as a genuine opening rather than a model
+   floating above a picture.
    ------------------------------------------------------------ */
-AFRAME.registerComponent('fit-to-card', {
+AFRAME.registerComponent('portal-well', {
   schema: {
-    size: { type: 'number', default: 0.22 },
-    lift: { type: 'number', default: 0.0 }
+    width:  { type: 'number', default: 0.76 },
+    depth:  { type: 'number', default: 0.44 },
+    drop:   { type: 'number', default: 0.52 },
+    rock:   { type: 'color',  default: '#123742' },
+    sand:   { type: 'color',  default: '#C9BCA0' }
   },
 
   init: function () {
-    // The model may already be attached by the time this component
-    // initialises — a-asset-item preloading makes that race real —
-    // so check for it as well as listening for the event.
+    const d = this.data;
+    const group = new THREE.Group();
+
+    const hw = d.width * 0.5;
+    const hd = d.depth * 0.5;
+
+    /* --- occluder: big plane, hole in the middle --- */
+    const outer = new THREE.Shape();
+    outer.moveTo(-6, -6);
+    outer.lineTo( 6, -6);
+    outer.lineTo( 6,  6);
+    outer.lineTo(-6,  6);
+    outer.lineTo(-6, -6);
+
+    const hole = new THREE.Path();
+    const r = 0.04;                     // corner rounding
+    hole.moveTo(-hw + r, -hd);
+    hole.lineTo( hw - r, -hd);
+    hole.quadraticCurveTo( hw, -hd,  hw, -hd + r);
+    hole.lineTo( hw,  hd - r);
+    hole.quadraticCurveTo( hw,  hd,  hw - r,  hd);
+    hole.lineTo(-hw + r,  hd);
+    hole.quadraticCurveTo(-hw,  hd, -hw,  hd - r);
+    hole.lineTo(-hw, -hd + r);
+    hole.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+    outer.holes.push(hole);
+
+    const occMat = new THREE.MeshBasicMaterial({
+      colorWrite: false,      // invisible
+      depthWrite: true,       // but still occludes
+      side: THREE.DoubleSide
+    });
+
+    const occluder = new THREE.Mesh(new THREE.ShapeGeometry(outer), occMat);
+    occluder.rotation.x = -Math.PI / 2;   // lay flat at the card surface
+    occluder.renderOrder = -10;           // must write depth before anything else
+    group.add(occluder);
+
+    /* --- the well itself: an inside-out box ---
+       Vertex colours darken the walls with depth, which does the
+       job of water absorption without a custom shader. */
+    const wellGeo = new THREE.BoxGeometry(d.width, d.drop, d.depth, 1, 6, 1);
+    const posAttr = wellGeo.attributes.position;
+    const colours = new Float32Array(posAttr.count * 3);
+    const top = new THREE.Color(d.rock);
+    const bottom = new THREE.Color(d.rock).multiplyScalar(0.28);
+    const c = new THREE.Color();
+
+    for (let i = 0; i < posAttr.count; i++) {
+      // y runs from -drop/2 (bottom) to +drop/2 (top)
+      const t = (posAttr.getY(i) + d.drop * 0.5) / d.drop;
+      c.copy(bottom).lerp(top, Math.pow(t, 0.8));
+      colours[i * 3] = c.r;
+      colours[i * 3 + 1] = c.g;
+      colours[i * 3 + 2] = c.b;
+    }
+    wellGeo.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+
+    const wallMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.95,
+      metalness: 0.0,
+      side: THREE.BackSide
+    });
+
+    const well = new THREE.Mesh(wellGeo, wallMat);
+    well.position.y = -d.drop * 0.5;
+    group.add(well);
+
+    /* --- sand floor --- */
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(d.sand),
+      roughness: 1.0,
+      metalness: 0.0,
+      emissive: new THREE.Color(d.sand).multiplyScalar(0.16)
+    });
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(d.width * 0.99, d.depth * 0.99),
+      floorMat
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -d.drop + 0.004;
+    group.add(floor);
+
+    // A dedicated downward light keeps the sand bright without
+    // washing out the walls.
+    const sun = new THREE.DirectionalLight(0xFFF6E4, 0.9);
+    sun.position.set(0.1, 1, 0.15);
+    sun.target.position.set(0, -d.drop, 0);
+    group.add(sun);
+    group.add(sun.target);
+
+    /* --- rim highlight so the opening edge reads clearly --- */
+    const rimGeo = new THREE.EdgesGeometry(
+      new THREE.PlaneGeometry(d.width, d.depth)
+    );
+    const rim = new THREE.LineSegments(
+      rimGeo,
+      new THREE.LineBasicMaterial({ color: 0x9FE8FF, transparent: true, opacity: 0.55 })
+    );
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.y = 0.002;
+    group.add(rim);
+
+    this.el.setObject3D('well', group);
+    this.wallMat = wallMat;
+    this.floorMat = floorMat;
+  }
+});
+
+/* ------------------------------------------------------------
+   fit-in-well
+   Source models arrive in arbitrary units, so a fixed scale
+   value breaks the moment the model is swapped. This measures
+   the bounding box after load and scales the model to a target
+   size, then sits its base on the sand.
+   ------------------------------------------------------------ */
+AFRAME.registerComponent('fit-in-well', {
+  schema: {
+    size:  { type: 'number', default: 0.30 },
+    floor: { type: 'number', default: -0.52 }
+  },
+
+  init: function () {
+    // The model can already be attached by the time this runs —
+    // a-asset-item preloading makes that race real — so check as
+    // well as listen.
     this.el.addEventListener('model-loaded', () => this.fit());
     if (this.el.getObject3D('mesh')) this.fit();
   },
@@ -32,18 +164,14 @@ AFRAME.registerComponent('fit-to-card', {
     if (!mesh || this.done) return;
 
     const obj = this.el.object3D;
-
-    // Measure at neutral transform, otherwise each fit compounds
-    // the last one.
     obj.scale.set(1, 1, 1);
     obj.position.set(0, 0, 0);
     obj.updateMatrixWorld(true);
 
-    // setFromObject returns world space. Convert into this entity's
-    // local space so the numbers mean something we can act on.
+    // setFromObject works in world space; convert into this
+    // entity's local space so the numbers are actionable.
     const box = new THREE.Box3().setFromObject(mesh);
-    const toLocal = new THREE.Matrix4().copy(obj.matrixWorld).invert();
-    box.applyMatrix4(toLocal);
+    box.applyMatrix4(new THREE.Matrix4().copy(obj.matrixWorld).invert());
 
     const span = new THREE.Vector3();
     box.getSize(span);
@@ -53,43 +181,39 @@ AFRAME.registerComponent('fit-to-card', {
     const factor = this.data.size / largest;
     obj.scale.setScalar(factor);
 
-    // Centre horizontally, then sit the base on the card surface.
     const centre = new THREE.Vector3();
     box.getCenter(centre);
 
     obj.position.x = -centre.x * factor;
     obj.position.z = -centre.z * factor;
-    obj.position.y = -box.min.y * factor + this.data.lift;
+    obj.position.y = this.data.floor - box.min.y * factor;
 
     this.done = true;
-    this.el.emit('fitted', { factor: factor, span: span });
+    this.el.emit('fitted', { factor: factor });
   }
 });
 
 /* ------------------------------------------------------------
    bleachable
-   Clones every material so we never mutate a shared one, stores
-   the original colour, then blends toward bone white as
-   `amount` runs 0 → 1.
-
-   This is why no second white model is needed.
+   Clones every material so a shared one is never mutated,
+   stores the original colour, then blends toward bone white as
+   `amount` runs 0 → 1. This is why no second white model is
+   needed.
    ------------------------------------------------------------ */
 AFRAME.registerComponent('bleachable', {
-  schema: {
-    amount: { type: 'number', default: 0 }
-  },
+  schema: { amount: { type: 'number', default: 0 } },
 
   init: function () {
     this.materials = [];
     this.bone = new THREE.Color('#FFF6EC');
 
-    this.el.addEventListener('model-loaded', () => {
+    const grab = () => {
       const root = this.el.getObject3D('mesh');
-      if (!root) return;
+      if (!root || this.grabbed) return;
+      this.grabbed = true;
 
       root.traverse((node) => {
         if (!node.isMesh || !node.material) return;
-
         const many = Array.isArray(node.material);
         const list = many ? node.material : [node.material];
 
@@ -108,17 +232,19 @@ AFRAME.registerComponent('bleachable', {
       });
 
       this.apply();
-    });
+    };
+
+    this.el.addEventListener('model-loaded', grab);
+    grab();
   },
 
   update: function () { this.apply(); },
 
   apply: function () {
     const t = Math.min(1, Math.max(0, this.data.amount));
-
     this.materials.forEach(({ mat, base, baseRough, baseMetal }) => {
       if (mat.color) mat.color.copy(base).lerp(this.bone, t);
-      // A dead skeleton is chalkier and less reflective than living tissue.
+      // A dead skeleton is chalkier and less reflective.
       if (mat.roughness !== undefined) mat.roughness = baseRough + (0.95 - baseRough) * t;
       if (mat.metalness !== undefined) mat.metalness = baseMetal * (1 - t);
       mat.needsUpdate = true;
@@ -128,12 +254,9 @@ AFRAME.registerComponent('bleachable', {
 
 /* ------------------------------------------------------------
    tap-to-bleach
-   One tap runs healthy → bleached. Tap again to recover.
    ------------------------------------------------------------ */
 AFRAME.registerComponent('tap-to-bleach', {
-  schema: {
-    duration: { type: 'number', default: 3400 }
-  },
+  schema: { duration: { type: 'number', default: 3600 } },
 
   init: function () {
     this.running = false;
@@ -141,10 +264,9 @@ AFRAME.registerComponent('tap-to-bleach', {
     this.elapsed = 0;
 
     this.onTap = this.onTap.bind(this);
-    this.el.addEventListener('click', this.onTap);
 
     // The MindAR canvas swallows some pointer events on certain
-    // Android builds, so listen at document level too.
+    // Android builds, so listen at document level.
     this.onScreenTap = (ev) => {
       if (ev.target.closest && ev.target.closest('.ar-back')) return;
       this.onTap();
@@ -159,17 +281,15 @@ AFRAME.registerComponent('tap-to-bleach', {
     this.from = this.bleached ? 1 : 0;
     this.to   = this.bleached ? 0 : 1;
     this.bleached = !this.bleached;
-
     this.el.sceneEl.emit('reef-state-change', { bleaching: this.to === 1 });
   },
 
   tick: function (time, delta) {
     if (!this.running) return;
-
     this.elapsed += delta;
     const t = Math.min(1, this.elapsed / this.data.duration);
 
-    // Ease out — colour drains fast, then the last of it lingers.
+    // Ease out — colour drains fast, the last of it lingers.
     const eased = 1 - Math.pow(1 - t, 2.4);
     const value = this.from + (this.to - this.from) * eased;
 
@@ -180,135 +300,121 @@ AFRAME.registerComponent('tap-to-bleach', {
   },
 
   remove: function () {
-    this.el.removeEventListener('click', this.onTap);
     document.removeEventListener('click', this.onScreenTap);
   }
 });
 
 /* ------------------------------------------------------------
    reef-fish
-   A proper fish rather than a sphere on a stick.
-
-   Body is a lathe — a profile curve revolved around the long
-   axis — which gives the tapered fusiform shape real fish have.
-   Flattening it laterally makes it read as a fish from the side.
-   Fins are thin cones and triangles. Tail beat, banking and
-   pitch are driven per-frame in tick().
+   Reef fish are laterally compressed and deep-bodied — closer
+   to a disc than a torpedo. Body is a revolved profile, then
+   squashed sideways and stretched vertically to get that shape.
    ------------------------------------------------------------ */
 AFRAME.registerComponent('reef-fish', {
   schema: {
-    hue:     { type: 'color',  default: '#FFB35C' },
-    belly:   { type: 'color',  default: '#FFF0D8' },
-    length:  { type: 'number', default: 0.11 },
-    radius:  { type: 'number', default: 0.14 },   // orbit radius
-    height:  { type: 'number', default: 0.10 },   // orbit height above card
-    speed:   { type: 'number', default: 0.55 },   // revolutions per second-ish
-    phase:   { type: 'number', default: 0 },
-    wobble:  { type: 'number', default: 0.035 }
+    hue:    { type: 'color',  default: '#FFB35C' },
+    length: { type: 'number', default: 0.075 },
+    radius: { type: 'number', default: 0.16 },
+    depth:  { type: 'number', default: 0.10 },
+    level:  { type: 'number', default: -0.22 },
+    speed:  { type: 'number', default: 0.35 },
+    phase:  { type: 'number', default: 0 },
+    wobble: { type: 'number', default: 0.03 }
   },
 
   init: function () {
     const d = this.data;
+    const L = d.length;
     const group = new THREE.Group();
 
     const skin = new THREE.MeshStandardMaterial({
       color: new THREE.Color(d.hue),
-      roughness: 0.34,
-      metalness: 0.18,
+      roughness: 0.30,
+      metalness: 0.22,
       transparent: true,
       opacity: 1
     });
 
-    const finSkin = new THREE.MeshStandardMaterial({
+    const fin = new THREE.MeshStandardMaterial({
       color: new THREE.Color(d.hue),
-      roughness: 0.5,
-      metalness: 0.05,
+      roughness: 0.55,
+      metalness: 0.02,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.68,
       side: THREE.DoubleSide
     });
 
-    this.materials = [skin, finSkin];
+    this.materials = [skin, fin];
 
-    /* --- body: revolve a tapered profile --- */
-    const L = d.length;
+    /* --- body --- */
     const profile = [];
-    const steps = 14;
+    const steps = 16;
     for (let i = 0; i <= steps; i++) {
-      const u = i / steps;                       // 0 = tail root, 1 = nose
+      const u = i / steps;                    // 0 = tail root, 1 = snout
       const x = -L * 0.5 + u * L;
-      // Fullest just behind the head, tapering to a narrow caudal
-      // peduncle at one end and a pointed snout at the other.
-      const r = Math.sin(Math.pow(u, 0.62) * Math.PI) * L * 0.21 + L * 0.010;
-      profile.push(new THREE.Vector2(Math.max(r, 0.0006), x));
+      const r = Math.sin(Math.pow(u, 0.58) * Math.PI) * L * 0.22 + L * 0.008;
+      profile.push(new THREE.Vector2(Math.max(r, 0.0005), x));
     }
 
-    const bodyGeo = new THREE.LatheGeometry(profile, 12);
-    const body = new THREE.Mesh(bodyGeo, skin);
-    body.rotation.z = Math.PI / 2;   // lay the lathe axis along X
-    body.scale.set(1, 1, 0.62);      // flatten laterally
+    const body = new THREE.Mesh(new THREE.LatheGeometry(profile, 14), skin);
+    body.rotation.z = Math.PI / 2;
+    body.scale.set(1, 1.35, 0.34);   // deep-bodied and thin: a reef fish
     group.add(body);
 
-    /* --- caudal fin (tail) --- */
+    /* --- caudal fin, forked --- */
     const tailShape = new THREE.Shape();
     tailShape.moveTo(0, 0);
-    tailShape.lineTo(-L * 0.34, L * 0.26);
-    tailShape.lineTo(-L * 0.22, 0);
-    tailShape.lineTo(-L * 0.34, -L * 0.26);
+    tailShape.lineTo(-L * 0.30, L * 0.30);
+    tailShape.lineTo(-L * 0.19, 0);
+    tailShape.lineTo(-L * 0.30, -L * 0.30);
     tailShape.lineTo(0, 0);
 
-    const tail = new THREE.Mesh(new THREE.ShapeGeometry(tailShape), finSkin);
-    tail.position.x = -L * 0.5;
     this.tail = new THREE.Group();
-    this.tail.position.x = -L * 0.46;
-    tail.position.x = -L * 0.04;
-    this.tail.add(tail);
+    this.tail.position.x = -L * 0.44;
+    const tailMesh = new THREE.Mesh(new THREE.ShapeGeometry(tailShape), fin);
+    this.tail.add(tailMesh);
     group.add(this.tail);
 
-    /* --- dorsal fin --- */
-    const dorsalShape = new THREE.Shape();
-    dorsalShape.moveTo(L * 0.18, 0);
-    dorsalShape.lineTo(-L * 0.01, L * 0.26);
-    dorsalShape.lineTo(-L * 0.24, 0);
-    const dorsal = new THREE.Mesh(new THREE.ShapeGeometry(dorsalShape), finSkin);
-    dorsal.position.y = L * 0.08;
-    group.add(dorsal);
+    /* --- tall dorsal, matching the deep body --- */
+    const dorsal = new THREE.Shape();
+    dorsal.moveTo( L * 0.20, 0);
+    dorsal.lineTo(-L * 0.02, L * 0.30);
+    dorsal.lineTo(-L * 0.26, 0);
+    const dorsalMesh = new THREE.Mesh(new THREE.ShapeGeometry(dorsal), fin);
+    dorsalMesh.position.y = L * 0.12;
+    group.add(dorsalMesh);
 
-    /* --- anal fin, smaller and underneath --- */
-    const analShape = new THREE.Shape();
-    analShape.moveTo(-L * 0.06, 0);
-    analShape.lineTo(-L * 0.16, -L * 0.13);
-    analShape.lineTo(-L * 0.26, 0);
-    const anal = new THREE.Mesh(new THREE.ShapeGeometry(analShape), finSkin);
-    anal.position.y = -L * 0.07;
-    group.add(anal);
+    /* --- anal fin --- */
+    const anal = new THREE.Shape();
+    anal.moveTo(-L * 0.04, 0);
+    anal.lineTo(-L * 0.15, -L * 0.20);
+    anal.lineTo(-L * 0.28, 0);
+    const analMesh = new THREE.Mesh(new THREE.ShapeGeometry(anal), fin);
+    analMesh.position.y = -L * 0.11;
+    group.add(analMesh);
 
-    /* --- pectoral fins --- */
-    const pecShape = new THREE.Shape();
-    pecShape.moveTo(0, 0);
-    pecShape.lineTo(-L * 0.14, L * 0.05);
-    pecShape.lineTo(-L * 0.13, -L * 0.06);
-    [1, -1].forEach((side) => {
-      const pec = new THREE.Mesh(new THREE.ShapeGeometry(pecShape), finSkin);
-      pec.position.set(L * 0.02, -L * 0.02, side * L * 0.06);
-      pec.rotation.y = side * 0.5;
-      pec.rotation.z = -0.25;
-      this['pec' + (side > 0 ? 'L' : 'R')] = pec;
-      group.add(pec);
+    /* --- pectorals --- */
+    const pec = new THREE.Shape();
+    pec.moveTo(0, 0);
+    pec.lineTo(-L * 0.15, L * 0.06);
+    pec.lineTo(-L * 0.14, -L * 0.07);
+    [1, -1].forEach((s) => {
+      const m = new THREE.Mesh(new THREE.ShapeGeometry(pec), fin);
+      m.position.set(L * 0.04, -L * 0.02, s * L * 0.035);
+      m.rotation.y = s * 0.6;
+      this['pec' + (s > 0 ? 'L' : 'R')] = m;
+      group.add(m);
     });
 
     /* --- eye --- */
-    const eyeGeo   = new THREE.SphereGeometry(L * 0.055, 10, 10);
-    const eyeMat   = new THREE.MeshStandardMaterial({ color: 0x101c26, roughness: 0.15, metalness: 0.3 });
-    const pupilGeo = new THREE.SphereGeometry(L * 0.024, 8, 8);
-    const pupilMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    [1, -1].forEach((side) => {
-      const eye = new THREE.Mesh(eyeGeo, eyeMat);
-      eye.position.set(L * 0.30, L * 0.045, side * L * 0.075);
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x0d1820, roughness: 0.1, metalness: 0.4 });
+    const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    [1, -1].forEach((s) => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(L * 0.062, 10, 10), eyeMat);
+      eye.position.set(L * 0.28, L * 0.06, s * L * 0.045);
       group.add(eye);
-
-      const glint = new THREE.Mesh(pupilGeo, pupilMat);
-      glint.position.set(L * 0.325, L * 0.062, side * L * 0.098);
+      const glint = new THREE.Mesh(new THREE.SphereGeometry(L * 0.024, 6, 6), glintMat);
+      glint.position.set(L * 0.305, L * 0.082, s * L * 0.062);
       group.add(glint);
     });
 
@@ -316,105 +422,99 @@ AFRAME.registerComponent('reef-fish', {
     this.group = group;
     this.t = d.phase;
     this.scatter = 0;
+    this.baseSpeed = d.speed;
   },
 
   tick: function (time, delta) {
     if (!this.group) return;
     const d = this.data;
-    const dt = delta / 1000;
-    this.t += dt * d.speed;
+    this.t += (delta / 1000) * (this.baseSpeed + this.scatter * 1.4);
 
-    // Orbit, flattened into an ellipse so it reads as a real
-    // swim path rather than a perfect circle.
     const a = this.t * Math.PI * 2;
-    const spread = 1 + this.scatter * 2.4;
-    const r  = d.radius * spread;
-    const x  = Math.cos(a) * r;
-    const z  = Math.sin(a) * r * 0.72;
-    const y  = d.height + Math.sin(this.t * 3.1 + d.phase) * d.wobble;
+    const x = Math.cos(a) * d.radius;
+    const z = Math.sin(a) * d.depth;
+    // As the reef dies, fish rise toward the opening and leave.
+    const y = d.level + Math.sin(this.t * 3.0 + d.phase) * d.wobble + this.scatter * 0.42;
 
     this.group.position.set(x, y, z);
 
     // Face the direction of travel, then bank into the turn.
-    const nextA = a + 0.08;
-    const nx = Math.cos(nextA) * r;
-    const nz = Math.sin(nextA) * r * 0.72;
+    const na = a + 0.09;
+    const nx = Math.cos(na) * d.radius;
+    const nz = Math.sin(na) * d.depth;
     this.group.rotation.y = Math.atan2(-(nz - z), (nx - x));
-    this.group.rotation.z = Math.sin(this.t * 3.1 + d.phase) * 0.22;
-    this.group.rotation.x = Math.cos(this.t * 2.2 + d.phase) * 0.10;
+    this.group.rotation.z = Math.sin(this.t * 3.0 + d.phase) * 0.20;
+    this.group.rotation.x = Math.cos(this.t * 2.1 + d.phase) * 0.08;
 
-    // Tail beat, faster when scattering.
-    const beat = 9 + this.scatter * 14;
-    if (this.tail) this.tail.rotation.y = Math.sin(this.t * beat) * 0.55;
-    if (this.pecL) this.pecL.rotation.z = -0.25 + Math.sin(this.t * beat * 0.6) * 0.2;
-    if (this.pecR) this.pecR.rotation.z = -0.25 - Math.sin(this.t * beat * 0.6) * 0.2;
+    const beat = 10 + this.scatter * 16;
+    if (this.tail) this.tail.rotation.y = Math.sin(this.t * beat) * 0.6;
+    if (this.pecL) this.pecL.rotation.z =  Math.sin(this.t * beat * 0.6) * 0.25;
+    if (this.pecR) this.pecR.rotation.z = -Math.sin(this.t * beat * 0.6) * 0.25;
   },
 
   setScatter: function (v) {
     this.scatter = v;
-    this.data.speed = 0.55 + v * 1.5;
     this.materials.forEach((m, i) => {
-      m.opacity = (i === 0 ? 1 : 0.72) * Math.max(0, 1 - v * 1.2);
+      m.opacity = (i === 0 ? 1 : 0.68) * Math.max(0, 1 - v * 1.15);
     });
   }
 });
 
 /* ------------------------------------------------------------
-   marine-snow
-   Slow drifting particulate. Sells "underwater" more cheaply
-   than any amount of extra geometry.
+   marine-snow — slow drifting particulate inside the well
    ------------------------------------------------------------ */
 AFRAME.registerComponent('marine-snow', {
   schema: {
-    count:  { type: 'number', default: 90 },
-    spread: { type: 'number', default: 0.9 },
-    top:    { type: 'number', default: 0.75 }
+    count: { type: 'number', default: 70 },
+    w:     { type: 'number', default: 0.7 },
+    d:     { type: 'number', default: 0.4 },
+    top:   { type: 'number', default: 0 },
+    drop:  { type: 'number', default: 0.5 }
   },
 
   init: function () {
-    const d = this.data;
-    const pos = new Float32Array(d.count * 3);
-    this.speeds = new Float32Array(d.count);
-    this.sway   = new Float32Array(d.count);
+    const s = this.data;
+    const pos = new Float32Array(s.count * 3);
+    this.speeds = new Float32Array(s.count);
+    this.sway = new Float32Array(s.count);
 
-    for (let i = 0; i < d.count; i++) {
-      pos[i * 3]     = (Math.random() - 0.5) * d.spread;
-      pos[i * 3 + 1] = Math.random() * d.top;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * d.spread;
-      this.speeds[i] = 0.012 + Math.random() * 0.03;
+    for (let i = 0; i < s.count; i++) {
+      pos[i * 3]     = (Math.random() - 0.5) * s.w;
+      pos[i * 3 + 1] = s.top - Math.random() * s.drop;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * s.d;
+      this.speeds[i] = 0.008 + Math.random() * 0.022;
       this.sway[i]   = Math.random() * Math.PI * 2;
     }
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 
-    const mat = new THREE.PointsMaterial({
+    this.points = new THREE.Points(geo, new THREE.PointsMaterial({
       color: 0xdff6ff,
-      size: 0.006,
+      size: 0.005,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.6,
       depthWrite: false,
       blending: THREE.AdditiveBlending
-    });
+    }));
 
-    this.points = new THREE.Points(geo, mat);
     this.el.setObject3D('snow', this.points);
   },
 
   tick: function (time, delta) {
     if (!this.points) return;
+    const s = this.data;
     const dt = delta / 1000;
     const arr = this.points.geometry.attributes.position.array;
-    const d = this.data;
 
-    for (let i = 0; i < d.count; i++) {
+    for (let i = 0; i < s.count; i++) {
       arr[i * 3 + 1] -= this.speeds[i] * dt;
-      arr[i * 3] += Math.sin(time * 0.0004 + this.sway[i]) * 0.00012;
+      arr[i * 3] += Math.sin(time * 0.0004 + this.sway[i]) * 0.0001;
 
-      if (arr[i * 3 + 1] < 0) {
-        arr[i * 3 + 1] = d.top;
-        arr[i * 3]     = (Math.random() - 0.5) * d.spread;
-        arr[i * 3 + 2] = (Math.random() - 0.5) * d.spread;
+      if (arr[i * 3 + 1] < s.top - s.drop) {
+        arr[i * 3 + 1] = s.top;
+        arr[i * 3]     = (Math.random() - 0.5) * s.w;
+        arr[i * 3 + 2] = (Math.random() - 0.5) * s.d;
       }
     }
     this.points.geometry.attributes.position.needsUpdate = true;
@@ -422,27 +522,36 @@ AFRAME.registerComponent('marine-snow', {
 });
 
 /* ------------------------------------------------------------
-   caustics
-   Sunlight breaking on the surface, projected down onto the
-   scene. A slowly animated pattern on a spotlight is enough to
-   suggest water above without rendering any.
+   caustic-light
+   Sunlight breaking on a surface above. Two out-of-phase sines
+   read as irregular flicker; a slow drift moves the pattern.
    ------------------------------------------------------------ */
 AFRAME.registerComponent('caustic-light', {
+  schema: { intensity: { type: 'number', default: 0.55 } },
+
   init: function () {
-    const light = new THREE.PointLight(0x9fe8ff, 1.1, 3, 2);
-    light.position.set(0, 0.7, 0.2);
+    // Wide radius and low decay: a soft shifting wash rather than
+    // a hotspot burned onto the nearest wall.
+    const light = new THREE.PointLight(0xAEEBFF, this.data.intensity, 4.5, 0.7);
+    light.position.set(0, 0.12, 0);
     this.el.setObject3D('caustic', light);
     this.light = light;
-    this.base = 1.1;
+    this.base = this.data.intensity;
+    this.dim = 0;
+
+    this.el.sceneEl.addEventListener('reef-bleach-progress', (ev) => {
+      this.dim = ev.detail.amount;
+    });
   },
 
   tick: function (time) {
     if (!this.light) return;
-    // Two out-of-phase sines read as irregular flicker.
     const f = Math.sin(time * 0.0016) * 0.5 + Math.sin(time * 0.0041) * 0.28;
-    this.light.intensity = this.base + f * 0.45;
-    this.light.position.x = Math.sin(time * 0.0007) * 0.22;
-    this.light.position.z = Math.cos(time * 0.0009) * 0.22;
+    // Water clouds as the reef dies, so the light flattens out.
+    this.light.intensity = (this.base + f * 0.18) * (1 - this.dim * 0.45);
+    this.light.position.x = Math.sin(time * 0.0007) * 0.16;
+    this.light.position.z = Math.cos(time * 0.0009) * 0.10;
+    this.light.color.setHSL(0.52, 0.8 - this.dim * 0.55, 0.74);
   }
 });
 
@@ -469,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
       hintShown = true;
       hint.hidden = false;
       requestAnimationFrame(() => hint.classList.add('is-visible'));
-      setTimeout(() => hint.classList.remove('is-visible'), 4500);
+      setTimeout(() => hint.classList.remove('is-visible'), 5000);
     }
   });
 
@@ -478,11 +587,10 @@ document.addEventListener('DOMContentLoaded', () => {
     card.classList.remove('is-visible');
   });
 
-  // Fish react to bleaching — they scatter and fade as it advances.
   scene.addEventListener('reef-bleach-progress', (ev) => {
     document.querySelectorAll('[reef-fish]').forEach((el) => {
-      const comp = el.components['reef-fish'];
-      if (comp && comp.setScatter) comp.setScatter(ev.detail.amount);
+      const c = el.components['reef-fish'];
+      if (c && c.setScatter) c.setScatter(ev.detail.amount);
     });
   });
 
@@ -491,7 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
       cardState.textContent = 'Bleaching';
       cardState.classList.add('is-warning');
       cardCopy.textContent =
-        'Heat stress forces the coral to expel its algae. The white is the bare skeleton showing through.';
+        'Heat stress forces the coral to expel its algae. The white is the bare skeleton showing through, and the fish leave with the shelter.';
     } else {
       cardState.textContent = 'Recovering';
       cardState.classList.remove('is-warning');
@@ -501,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hint.classList.remove('is-visible');
   });
 
-  // If the camera never starts, say why rather than leaving a black screen.
+  // If the camera never starts, say why rather than showing black.
   setTimeout(() => {
     if (!document.querySelector('video')) {
       prompt.querySelector('.ar-prompt-title').textContent = 'Camera not available';
