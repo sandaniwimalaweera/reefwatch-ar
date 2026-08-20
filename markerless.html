@@ -90,10 +90,12 @@
       look-controls="magicWindowTrackingEnabled: true; mouseEnabled: false; touchEnabled: false; pointerLockEnabled: false"
       wasd-controls-enabled="false"></a-camera>
 
-    <!-- Sunlight filtered through water -->
-    <a-entity light="type: ambient; color: #BFE4F0; intensity: 0.8"></a-entity>
-    <a-entity light="type: directional; color: #FFFFFF; intensity: 1.0" position="1 3 1"></a-entity>
-    <a-entity light="type: directional; color: #5FC6F0; intensity: 0.35" position="-1 1 -1"></a-entity>
+    <!-- Sunlight filtered through water. Brighter than a typical
+         indoor rig because the reef is viewed against a lit room. -->
+    <a-entity light="type: ambient; color: #DCF2FA; intensity: 1.15"></a-entity>
+    <a-entity light="type: directional; color: #FFFFFF; intensity: 1.5" position="1 3 1"></a-entity>
+    <a-entity light="type: directional; color: #7FD8FF; intensity: 0.7" position="-1 1.5 -1"></a-entity>
+    <a-entity light="type: hemisphere; color: #BFE9F5; groundColor: #2A4A55; intensity: 0.7"></a-entity>
 
     <!-- Two tracking paths. Whichever the device supports is used;
          see the capability check in js/xr-scene.js. -->
@@ -119,19 +121,25 @@
 
     <!-- The reef, hidden until the user taps a surface -->
     <a-entity id="reef" visible="false">
+      <!-- Contact shadow. Without it the reef reads as floating,
+           because there is no real shadow from the room's light. -->
+      <a-entity contact-shadow="radius: 0.85; opacity: 0.5"></a-entity>
+
       <a-entity
         gltf-model="#reefModel"
-        fit-model="size: 0.9"
+        fit-model="size: 1.25"
         bleachable
         temperature-driven>
       </a-entity>
-      <a-entity marine-snow="count: 60; spread: 1.4; top: 1.1"></a-entity>
-      <a-entity caustic-light></a-entity>
+
+      <a-entity marine-snow="count: 70; spread: 1.8; top: 1.4"></a-entity>
+      <a-entity caustic-light="intensity: 0.9"></a-entity>
     </a-entity>
 
   </a-scene>
 
   <script src="js/lib-reef.js"></script>
+  <script src="js/api.js"></script>
   <script src="js/xr-scene.js"></script>
 </body>
 </html>

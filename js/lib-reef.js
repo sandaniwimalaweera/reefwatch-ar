@@ -371,12 +371,16 @@ AFRAME.registerComponent('marine-snow', {
    suggest water above without rendering any.
    ------------------------------------------------------------ */
 AFRAME.registerComponent('caustic-light', {
+  schema: {
+    intensity: { type: 'number', default: 1.1 }
+  },
+
   init: function () {
-    const light = new THREE.PointLight(0x9fe8ff, 1.1, 3, 2);
+    const light = new THREE.PointLight(0x9fe8ff, this.data.intensity, 3, 2);
     light.position.set(0, 0.7, 0.2);
     this.el.setObject3D('caustic', light);
     this.light = light;
-    this.base = 1.1;
+    this.base = this.data.intensity;
   },
 
   tick: function (time) {
@@ -386,5 +390,80 @@ AFRAME.registerComponent('caustic-light', {
     this.light.intensity = this.base + f * 0.45;
     this.light.position.x = Math.sin(time * 0.0007) * 0.22;
     this.light.position.z = Math.cos(time * 0.0009) * 0.22;
+  }
+});
+
+/* ------------------------------------------------------------
+   contact-shadow
+
+   A soft dark ellipse on the ground beneath an object. Real
+   shadow mapping cannot help here — there is no virtual light
+   matching the room's actual lighting — but the eye reads any
+   dark patch under an object as contact. Without it, placed
+   models appear to hover.
+
+   The gradient is drawn once into a canvas and used as an alpha
+   map, so it costs one texture and two triangles.
+   ------------------------------------------------------------ */
+AFRAME.registerComponent('contact-shadow', {
+  schema: {
+    radius:  { type: 'number', default: 0.8 },
+    opacity: { type: 'number', default: 0.45 },
+    lift:    { type: 'number', default: 0.004 }
+  },
+
+  init: function () {
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    const g = ctx.createRadialGradient(
+      size / 2, size / 2, 0,
+      size / 2, size / 2, size / 2
+    );
+    // Dense at the centre, falling away quickly — penumbra widens
+    // with distance from the contact point.
+    g.addColorStop(0.00, 'rgba(0,0,0,1)');
+    g.addColorStop(0.45, 'rgba(0,0,0,0.55)');
+    g.addColorStop(0.75, 'rgba(0,0,0,0.16)');
+    g.addColorStop(1.00, 'rgba(0,0,0,0)');
+
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, size, size);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace || tex.colorSpace;
+
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: this.data.opacity,
+      depthWrite: false,
+      color: 0x000000
+    });
+
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(this.data.radius * 2, this.data.radius * 2),
+      mat
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = this.data.lift;
+    mesh.renderOrder = -1;
+
+    this.el.setObject3D('shadow', mesh);
+    this.mat = mat;
+    this.base = this.data.opacity;
+
+    // A bleached reef loses its own shading, so soften the contact
+    // shadow slightly to match.
+    this.el.sceneEl.addEventListener('temperature-change', (ev) => {
+      if (this.mat) this.mat.opacity = this.base * (1 - ev.detail.bleach * 0.3);
+    });
+  },
+
+  remove: function () {
+    if (this.mat && this.mat.map) this.mat.map.dispose();
+    if (this.mat) this.mat.dispose();
   }
 });

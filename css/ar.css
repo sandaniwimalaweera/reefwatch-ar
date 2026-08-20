@@ -625,3 +625,7 @@ html, body {
   letter-spacing: 0.08em;
   color: rgba(255, 244, 234, 0.5);
 }
+
+/* Data provenance: a cached or averaged figure is marked so the
+   user is never misled into thinking it is a live reading. */
+.hud-site.is-stale { color: var(--warning); }

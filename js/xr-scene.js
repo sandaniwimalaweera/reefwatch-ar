@@ -600,11 +600,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ---------- live data ----------
-     Supplied by js/api.js on day 5. Until then the slider is the
-     only source and the HUD says so. */
+     The slider stays available either way, so the user can explore
+     temperatures the sea is not currently at. The HUD always says
+     where the starting figure came from. */
   if (window.ReefAPI && typeof window.ReefAPI.load === 'function') {
     window.ReefAPI.load().then((reading) => {
-      hudSite.textContent = reading.site + (reading.cached ? ' \u00B7 cached' : ' \u00B7 live');
+      let source;
+      if (!reading.offline)     source = 'live';
+      else if (reading.cached)  source = 'cached';
+      else                      source = 'seasonal average';
+
+      hudSite.textContent = reading.site + ' \u00B7 ' + source;
+      hudSite.classList.toggle('is-stale', reading.offline);
+
       slider.value = reading.celsius;
       setTemp(reading.celsius);
     }).catch(() => {
