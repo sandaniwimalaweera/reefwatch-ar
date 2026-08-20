@@ -27,7 +27,8 @@
           Scan your floor, then tap to drop a reef section into the room at real
           scale. Sea temperature decides whether it keeps its colour.
         </p>
-        <button class="ar-btn" id="start">Start AR</button>
+        <p class="ar-gate-note" id="gateNote">Checking device capability…</p>
+        <button class="ar-btn" id="start">Start</button>
         <a class="ar-gate-alt" href="index.html">Back</a>
       </div>
     </div>
@@ -68,7 +69,10 @@
 
   <a-scene
     reef-state="celsius: 28"
-    webxr="optionalFeatures: hit-test, dom-overlay, local-floor; overlayElement: #overlay"
+    webxr="requiredFeatures: hit-test;
+           optionalFeatures: dom-overlay, local-floor, anchors;
+           referenceSpaceType: local;
+           overlayElement: #overlay"
     renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
@@ -77,15 +81,24 @@
       <a-asset-item id="reefModel" src="assets/models/reef.glb"></a-asset-item>
     </a-assets>
 
-    <a-camera position="0 1.6 0"></a-camera>
+    <!-- In a WebXR session the device supplies the pose. Outside one,
+         look-controls' magic-window mode reads DeviceOrientation, which
+         is what drives the sensor fallback. Eye height is assumed so a
+         ground plane can be estimated. -->
+    <a-camera
+      position="0 1.4 0"
+      look-controls="magicWindowTrackingEnabled: true; mouseEnabled: false; touchEnabled: false; pointerLockEnabled: false"
+      wasd-controls-enabled="false"></a-camera>
 
     <!-- Sunlight filtered through water -->
     <a-entity light="type: ambient; color: #BFE4F0; intensity: 0.8"></a-entity>
     <a-entity light="type: directional; color: #FFFFFF; intensity: 1.0" position="1 3 1"></a-entity>
     <a-entity light="type: directional; color: #5FC6F0; intensity: 0.35" position="-1 1 -1"></a-entity>
 
-    <!-- Hit-testing runs here; it drives the reticle and places the reef -->
+    <!-- Two tracking paths. Whichever the device supports is used;
+         see the capability check in js/xr-scene.js. -->
     <a-entity id="placer" hit-test-placer="reticle: #reticle; target: #reef"></a-entity>
+    <a-entity id="sensor" sensor-ar="reticle: #reticle; target: #reef; eyeHeight: 1.4"></a-entity>
 
     <!-- Reticle, hidden until a surface is found -->
     <a-entity id="reticle" visible="false">

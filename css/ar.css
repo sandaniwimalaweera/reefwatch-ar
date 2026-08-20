@@ -593,3 +593,35 @@ html, body {
 .a-enter-ar-button {
   display: none !important;
 }
+
+/* ---------- Sensor fallback ----------
+   The camera feed is a plain <video> behind a transparent canvas,
+   rather than the WebXR compositor. */
+
+.sensor-feed {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.xr-page.in-sensor-ar,
+.xr-page.in-sensor-ar .a-canvas {
+  background: transparent !important;
+}
+
+.xr-page.in-sensor-ar .a-canvas {
+  position: fixed !important;
+  inset: 0;
+  z-index: 1 !important;
+}
+
+.ar-gate-note {
+  margin: 0 0 1.1rem;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  color: rgba(255, 244, 234, 0.5);
+}

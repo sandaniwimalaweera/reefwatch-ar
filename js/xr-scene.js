@@ -205,15 +205,161 @@ AFRAME.registerComponent('hit-test-placer', {
 });
 
 /* ------------------------------------------------------------
+   sensor-ar
+
+   Markerless tracking for devices that cannot run WebXR. ARCore
+   certification is hardware-locked, so a large share of Android
+   phones — and every iPhone — cannot open an immersive-ar
+   session at all. Without a second path, half this project
+   would be undemonstrable on the devices actually to hand.
+
+   The brief permits "the WebXR Device API or supported browser
+   equivalents". This is that equivalent:
+
+     getUserMedia            → live camera passthrough
+     DeviceOrientation       → rotational tracking of the phone
+     assumed eye height      → a ground plane at y = 0
+     ray/plane intersection  → where the user is pointing
+
+   Honest limitation: there is no positional tracking. Rotation
+   is tracked, translation is not, so walking toward the reef
+   does not close the distance. Recorded in docs/TESTING.md.
+   ------------------------------------------------------------ */
+AFRAME.registerComponent('sensor-ar', {
+  schema: {
+    reticle:   { type: 'selector' },
+    target:    { type: 'selector' },
+    eyeHeight: { type: 'number', default: 1.4 },   // metres
+    maxRange:  { type: 'number', default: 6.0 },
+    minRange:  { type: 'number', default: 0.6 }
+  },
+
+  init: function () {
+    this.active = false;
+    this.hasGround = false;
+    this.placed = false;
+
+    this.dir = new THREE.Vector3();
+    this.camPos = new THREE.Vector3();
+    this.point = new THREE.Vector3();
+    this.forward = new THREE.Vector3(0, 0, -1);
+  },
+
+  start: function () {
+    const el = this.el;
+
+    return navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false
+    }).then((stream) => {
+      this.stream = stream;
+
+      const video = document.createElement('video');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('autoplay', '');
+      video.setAttribute('muted', '');
+      video.muted = true;
+      video.srcObject = stream;
+      video.className = 'sensor-feed';
+      document.body.appendChild(video);
+      this.video = video;
+
+      return video.play();
+    }).then(() => {
+      this.active = true;
+      document.body.classList.add('in-sensor-ar');
+      el.emit('sensor-ar-started');
+    });
+  },
+
+  stop: function () {
+    this.active = false;
+    this.placed = false;
+    this.hasGround = false;
+
+    if (this.stream) {
+      this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
+    }
+    if (this.video) {
+      this.video.remove();
+      this.video = null;
+    }
+    document.body.classList.remove('in-sensor-ar');
+  },
+
+  tick: function () {
+    if (!this.active || this.placed) return;
+
+    const cam = this.el.sceneEl.camera;
+    if (!cam) return;
+
+    cam.getWorldPosition(this.camPos);
+    this.dir.copy(this.forward).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()));
+
+    // Only meaningful when the phone is tilted downward; otherwise
+    // the ray never meets the ground plane.
+    if (this.dir.y > -0.08) {
+      if (this.hasGround) {
+        this.hasGround = false;
+        if (this.data.reticle) this.data.reticle.setAttribute('visible', false);
+        this.el.emit('ground-lost');
+      }
+      return;
+    }
+
+    // Intersect the view ray with the plane y = 0.
+    const t = -this.camPos.y / this.dir.y;
+    const distance = Math.min(this.data.maxRange, Math.max(this.data.minRange, t));
+
+    this.point.copy(this.dir).multiplyScalar(distance).add(this.camPos);
+    this.point.y = 0;
+
+    if (this.data.reticle) {
+      this.data.reticle.object3D.position.copy(this.point);
+      this.data.reticle.object3D.rotation.set(0, 0, 0);
+      this.data.reticle.setAttribute('visible', true);
+    }
+
+    if (!this.hasGround) {
+      this.hasGround = true;
+      this.el.emit('ground-found');
+    }
+  },
+
+  place: function () {
+    if (!this.active || !this.hasGround || !this.data.target) return;
+
+    this.data.target.object3D.position.copy(this.point);
+    this.data.target.object3D.rotation.set(0, 0, 0);
+    this.data.target.setAttribute('visible', true);
+
+    if (!this.placed) {
+      this.placed = true;
+      if (this.data.reticle) this.data.reticle.setAttribute('visible', false);
+      this.el.emit('reef-placed');
+    }
+  },
+
+  rearm: function () {
+    this.placed = false;
+    if (this.data.target) this.data.target.setAttribute('visible', false);
+  }
+});
+
+/* ------------------------------------------------------------
    Scene wiring
    ------------------------------------------------------------ */
 document.addEventListener('DOMContentLoaded', () => {
   const scene     = document.querySelector('a-scene');
+  const placer    = document.getElementById('placer');
+  const sensor    = document.getElementById('sensor');
   const reticle   = document.getElementById('reticle');
   const reef      = document.getElementById('reef');
   const gate      = document.getElementById('gate');
   const gateTitle = document.getElementById('gateTitle');
   const gateCopy  = document.getElementById('gateCopy');
+  const gateNote  = document.getElementById('gateNote');
   const startBtn  = document.getElementById('start');
   const scanMsg   = document.getElementById('scan');
   const hud       = document.getElementById('hud');
@@ -225,108 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const resetBtn  = document.getElementById('reset');
 
   let placed = false;
+  let mode = null;          // 'webxr' | 'sensor'
 
-  /* ---------- support check ---------- */
-  const unsupported = (title, copy) => {
-    gateTitle.textContent = title;
-    gateCopy.textContent = copy;
-    startBtn.hidden = true;
-  };
-
-  if (!navigator.xr) {
-    unsupported(
-      'Not supported on this browser',
-      'Markerless AR needs WebXR. Open this page in Chrome on an ARCore-capable Android device. The marker mode works here.'
-    );
-  } else {
-    navigator.xr.isSessionSupported('immersive-ar').then((ok) => {
-      if (!ok) {
-        unsupported(
-          'Not supported on this device',
-          'This device does not offer immersive AR sessions. iOS Safari does not implement WebXR hit-testing — use the marker mode instead.'
-        );
-      }
-    }).catch(() => {
-      unsupported('Could not check AR support', 'Try reloading, or use the marker mode.');
-    });
-  }
-
-  /* ---------- enter AR ----------
-     The gate stays up until the session is confirmed running.
-     Hiding it optimistically leaves a blank screen whenever
-     entry fails. */
-  startBtn.addEventListener('click', () => {
-    startBtn.disabled = true;
-    startBtn.textContent = 'Starting…';
-
-    let entered = false;
-    const onEntered = () => { entered = true; };
-    scene.addEventListener('enter-vr', onEntered, { once: true });
-
-    try {
-      if (typeof scene.enterAR === 'function') {
-        scene.enterAR();
-      } else {
-        scene.enterVR(true);
-      }
-    } catch (err) {
-      gateFailed(err && err.message);
-      return;
-    }
-
-    // If nothing has happened after a few seconds, entry failed
-    // silently — put the user back in control rather than
-    // leaving them on a blank page.
-    setTimeout(() => {
-      if (!entered) gateFailed('The AR session did not start. Your browser may have blocked it, or the device may not support immersive AR.');
-    }, 4000);
-  });
-
-  const gateFailed = (msg) => {
-    gate.classList.remove('is-hidden');
-    startBtn.disabled = false;
-    startBtn.textContent = 'Try again';
-    gateTitle.textContent = 'Could not start AR';
-    gateCopy.textContent = msg || 'Something prevented the session from starting.';
-  };
-
-  scene.addEventListener('enter-vr', () => {
-    if (!scene.is('ar-mode')) {
-      gateFailed('The session started in VR mode rather than AR.');
-      return;
-    }
-    document.body.classList.add('in-ar');
-    gate.classList.add('is-hidden');
-    scanMsg.hidden = false;
-    requestAnimationFrame(() => scanMsg.classList.add('is-visible'));
-  });
-
-  // Surface failures rather than leaving a blank screen.
-  scene.addEventListener('enter-vr-error', () => {
-    gateFailed('The AR session could not start.');
-  });
-
-  window.addEventListener('error', (e) => {
-    if (!scene.is('ar-mode')) return;
-    scanMsg.hidden = false;
-    scanMsg.classList.add('is-visible');
-    scanMsg.querySelector('.ar-scan-title').textContent = 'Something went wrong';
-    scanMsg.querySelector('.ar-scan-copy').textContent = e.message || 'Unexpected error.';
-  });
-
-  scene.addEventListener('exit-vr', () => {
-    document.body.classList.remove('in-ar');
-    gate.classList.remove('is-hidden');
-    startBtn.disabled = false;
-    startBtn.textContent = 'Start AR';
-    scanMsg.classList.remove('is-visible');
-    hud.classList.remove('is-visible');
-    placed = false;
-    reef.setAttribute('visible', false);
-  });
-
-  /* ---------- hit-test feedback ---------- */
-  const placer = document.getElementById('placer');
+  /* ---------- messaging helpers ---------- */
 
   const say = (title, copy) => {
     scanMsg.hidden = false;
@@ -335,66 +382,229 @@ document.addEventListener('DOMContentLoaded', () => {
     scanMsg.querySelector('.ar-scan-copy').textContent = copy;
   };
 
-  placer.addEventListener('hit-test-ready', () => {
+  const lockRing = (locked) => {
+    scanMsg.querySelector('.ar-scan-ring').classList.toggle('is-locked', locked);
+  };
+
+  const gateFailed = (msg) => {
+    gate.classList.remove('is-hidden');
+    document.body.classList.remove('in-ar');
+    startBtn.disabled = false;
+    startBtn.textContent = 'Try again';
+    gateTitle.textContent = 'Could not start';
+    gateCopy.textContent = msg || 'Something prevented the session from starting.';
+  };
+
+  // Turn a DOMException into something a person can act on.
+  const describe = (err) => {
+    const name = err && err.name;
+    if (name === 'NotAllowedError')  return 'Camera permission was denied. Allow it in the site settings and try again.';
+    if (name === 'NotFoundError')    return 'No camera was found on this device.';
+    if (name === 'NotReadableError') return 'The camera is in use by another app. Close it and try again.';
+    if (name === 'SecurityError')    return 'The browser blocked camera access. The page must be served over https.';
+    if (name === 'NotSupportedError')return 'This device cannot provide an immersive AR session.';
+    return (name ? name + ': ' : '') + ((err && err.message) || 'Unknown error.');
+  };
+
+  /* ---------- capability detection ----------
+     WebXR is preferred because it gives true six-degrees-of-
+     freedom tracking. The sensor path is the fallback for the
+     many devices that are not ARCore-certified. */
+
+  const chooseMode = () => {
+    if (!navigator.xr || !navigator.xr.isSessionSupported) {
+      return Promise.resolve('sensor');
+    }
+    return navigator.xr.isSessionSupported('immersive-ar')
+      .then((ok) => (ok ? 'webxr' : 'sensor'))
+      .catch(() => 'sensor');
+  };
+
+  chooseMode().then((m) => {
+    mode = m;
+
+    if (mode === 'webxr') {
+      gateNote.textContent = 'WebXR · full spatial tracking';
+      startBtn.textContent = 'Start AR';
+    } else {
+      gateNote.textContent = 'Sensor tracking · this device is not ARCore-certified';
+      startBtn.textContent = 'Start camera view';
+      gateCopy.textContent =
+        'This device cannot run WebXR, so the reef is placed using the camera and ' +
+        'motion sensors instead. Point the phone down at the floor and tap to place it.';
+    }
+  });
+
+  /* ---------- starting ---------- */
+
+  startBtn.addEventListener('click', () => {
+    startBtn.disabled = true;
+    startBtn.textContent = 'Starting…';
+
+    if (mode === 'webxr') {
+      startWebXR();
+    } else {
+      startSensor();
+    }
+  });
+
+  function startWebXR () {
+    // A-Frame swallows the underlying session error, so request a
+    // session first purely to read the real failure reason.
+    navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay', 'local-floor'],
+      domOverlay: { root: document.getElementById('overlay') }
+    }).then((probe) => probe.end()).then(() => {
+      let entered = false;
+      scene.addEventListener('enter-vr', () => { entered = true; }, { once: true });
+
+      if (typeof scene.enterAR === 'function') {
+        scene.enterAR();
+      } else {
+        scene.enterVR(true);
+      }
+
+      setTimeout(() => {
+        if (!entered) gateFailed('The session was granted but AR mode did not start. Try reloading.');
+      }, 5000);
+    }).catch((err) => {
+      // Fall back rather than dead-ending the user.
+      mode = 'sensor';
+      startSensor();
+    });
+  }
+
+  function startSensor () {
+    requestMotionPermission()
+      .then(() => sensor.components['sensor-ar'].start())
+      .then(() => {
+        gate.classList.add('is-hidden');
+        say('Point at the floor', 'Tilt your phone down until the ring appears, then tap to place the reef.');
+      })
+      .catch((err) => gateFailed(describe(err)));
+  }
+
+  // iOS 13+ gates DeviceOrientation behind an explicit request that
+  // must originate from a user gesture.
+  function requestMotionPermission () {
+    const DOE = window.DeviceOrientationEvent;
+    if (!DOE || typeof DOE.requestPermission !== 'function') {
+      return Promise.resolve();
+    }
+    return DOE.requestPermission().then((state) => {
+      if (state !== 'granted') {
+        throw new Error('Motion access was denied. Allow it and try again.');
+      }
+    });
+  }
+
+  /* ---------- WebXR session events ---------- */
+
+  scene.addEventListener('enter-vr', () => {
+    if (!scene.is('ar-mode')) return;
+    document.body.classList.add('in-ar');
+    gate.classList.add('is-hidden');
     say('Looking for a surface', 'Move your phone slowly across the floor.');
   });
+
+  scene.addEventListener('exit-vr', () => {
+    document.body.classList.remove('in-ar');
+    gate.classList.remove('is-hidden');
+    startBtn.disabled = false;
+    startBtn.textContent = mode === 'webxr' ? 'Start AR' : 'Start camera view';
+    scanMsg.classList.remove('is-visible');
+    hud.classList.remove('is-visible');
+    placed = false;
+    reef.setAttribute('visible', false);
+  });
+
+  /* ---------- tracking feedback (both paths) ---------- */
+
+  placer.addEventListener('hit-test-ready', () =>
+    say('Looking for a surface', 'Move your phone slowly across the floor.'));
 
   placer.addEventListener('hit-test-found', () => {
     if (placed) return;
     say('Surface found', 'Tap anywhere to place the reef.');
-    scanMsg.querySelector('.ar-scan-ring').classList.add('is-locked');
+    lockRing(true);
   });
 
   placer.addEventListener('hit-test-lost', () => {
     if (placed) return;
     say('Looking for a surface', 'Move your phone slowly across the floor.');
-    scanMsg.querySelector('.ar-scan-ring').classList.remove('is-locked');
+    lockRing(false);
   });
 
-  placer.addEventListener('hit-test-failed', (ev) => {
-    say('Hit-testing unavailable',
-        (ev.detail && ev.detail.message) || 'This device did not provide a hit-test source.');
+  placer.addEventListener('hit-test-failed', (ev) =>
+    say('Hit-testing unavailable', (ev.detail && ev.detail.message) || 'No hit-test source.'));
+
+  sensor.addEventListener('ground-found', () => {
+    if (placed) return;
+    say('Floor found', 'Tap anywhere to place the reef.');
+    lockRing(true);
+  });
+
+  sensor.addEventListener('ground-lost', () => {
+    if (placed) return;
+    say('Point at the floor', 'Tilt your phone down until the ring appears.');
+    lockRing(false);
   });
 
   /* ---------- placement ---------- */
-  placer.addEventListener('reef-placed', () => {
+
+  const onPlaced = () => {
     placed = true;
     scanMsg.classList.remove('is-visible');
     hud.hidden = false;
     requestAnimationFrame(() => hud.classList.add('is-visible'));
+  };
+
+  placer.addEventListener('reef-placed', onPlaced);
+  sensor.addEventListener('reef-placed', onPlaced);
+
+  // The sensor path has no XR select event, so taps come from the DOM.
+  document.getElementById('overlay').addEventListener('click', (ev) => {
+    if (placed) return;
+    if (ev.target.closest('.ar-back, .ar-btn, .hud')) return;
+    const comp = sensor.components['sensor-ar'];
+    if (comp && comp.active) comp.place();
   });
 
   resetBtn.addEventListener('click', () => {
     placed = false;
     hud.classList.remove('is-visible');
-    placer.components['hit-test-placer'].rearm();
-    say('Looking for a surface', 'Move your phone slowly across the floor.');
-    scanMsg.querySelector('.ar-scan-ring').classList.remove('is-locked');
+
+    const xr = placer.components['hit-test-placer'];
+    const sn = sensor.components['sensor-ar'];
+    if (xr && xr.rearm) xr.rearm();
+    if (sn && sn.rearm) sn.rearm();
+
+    lockRing(false);
+    say(mode === 'webxr' ? 'Looking for a surface' : 'Point at the floor',
+        'Tap again to place the reef somewhere else.');
   });
 
   /* ---------- temperature ---------- */
-  const setTemp = (c) => {
-    scene.setAttribute('reef-state', 'celsius', c);
-  };
 
-  slider.addEventListener('input', () => {
-    setTemp(parseFloat(slider.value));
-  });
+  const setTemp = (c) => scene.setAttribute('reef-state', 'celsius', c);
+
+  slider.addEventListener('input', () => setTemp(parseFloat(slider.value)));
 
   scene.addEventListener('temperature-change', (ev) => {
     const { celsius, label } = ev.detail;
-    hudTemp.textContent   = celsius.toFixed(1) + ' °C';
-    sliderVal.textContent = celsius.toFixed(1) + ' °C';
+    hudTemp.textContent   = celsius.toFixed(1) + ' \u00B0C';
+    sliderVal.textContent = celsius.toFixed(1) + ' \u00B0C';
     hudState.textContent  = label.text;
     hudState.className    = 'hud-state is-' + label.tone;
   });
 
   /* ---------- live data ----------
-     Filled in by js/api.js. Until then the HUD shows the slider
-     value and marks the source as manual. */
+     Supplied by js/api.js on day 5. Until then the slider is the
+     only source and the HUD says so. */
   if (window.ReefAPI && typeof window.ReefAPI.load === 'function') {
     window.ReefAPI.load().then((reading) => {
-      hudSite.textContent = reading.site + (reading.cached ? ' · cached' : ' · live');
+      hudSite.textContent = reading.site + (reading.cached ? ' \u00B7 cached' : ' \u00B7 live');
       slider.value = reading.celsius;
       setTemp(reading.celsius);
     }).catch(() => {
@@ -404,6 +614,6 @@ document.addEventListener('DOMContentLoaded', () => {
     hudSite.textContent = 'Manual control';
   }
 
-  // Publish the initial state so the HUD is never blank.
+  // Publish an initial state so the HUD is never blank.
   setTemp(parseFloat(slider.value));
 });
