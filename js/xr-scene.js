@@ -88,6 +88,123 @@ AFRAME.registerComponent('temperature-driven', {
 });
 
 /* ------------------------------------------------------------
+   hit-test-placer
+
+   Hit-testing implemented directly against the WebXR Device API
+   rather than through A-Frame's ar-hit-test component, which
+   throws during init on some builds when it reads the scene's
+   webxr configuration before that component has attached.
+
+   Working at this level also makes the pipeline explicit:
+     viewer reference space
+       → requestHitTestSource
+       → per-frame getHitTestResults
+       → pose in the local reference space
+   ------------------------------------------------------------ */
+AFRAME.registerComponent('hit-test-placer', {
+  schema: {
+    reticle: { type: 'selector' },
+    target:  { type: 'selector' }
+  },
+
+  init: function () {
+    this.source = null;
+    this.hasHit = false;
+    this.placed = false;
+    this.matrix = new THREE.Matrix4();
+    this.pos = new THREE.Vector3();
+    this.quat = new THREE.Quaternion();
+    this.scl = new THREE.Vector3();
+
+    const sceneEl = this.el.sceneEl;
+
+    sceneEl.addEventListener('enter-vr', () => {
+      if (!sceneEl.is('ar-mode')) return;
+
+      const session = sceneEl.renderer.xr.getSession();
+      if (!session) return;
+      this.session = session;
+
+      session.requestReferenceSpace('viewer')
+        .then((viewerSpace) => session.requestHitTestSource({ space: viewerSpace }))
+        .then((source) => {
+          this.source = source;
+          this.el.emit('hit-test-ready');
+        })
+        .catch((err) => {
+          this.el.emit('hit-test-failed', { message: err && err.message });
+        });
+
+      this.onSelect = () => this.place();
+      session.addEventListener('select', this.onSelect);
+
+      session.addEventListener('end', () => {
+        if (this.source && this.source.cancel) this.source.cancel();
+        this.source = null;
+        this.hasHit = false;
+        this.placed = false;
+      });
+    });
+  },
+
+  tick: function () {
+    const sceneEl = this.el.sceneEl;
+    const frame = sceneEl.frame;
+    if (!frame || !this.source || this.placed) return;
+
+    const refSpace = sceneEl.renderer.xr.getReferenceSpace();
+    if (!refSpace) return;
+
+    const results = frame.getHitTestResults(this.source);
+
+    if (!results.length) {
+      if (this.hasHit) {
+        this.hasHit = false;
+        if (this.data.reticle) this.data.reticle.setAttribute('visible', false);
+        this.el.emit('hit-test-lost');
+      }
+      return;
+    }
+
+    const pose = results[0].getPose(refSpace);
+    if (!pose) return;
+
+    this.matrix.fromArray(pose.transform.matrix);
+    this.matrix.decompose(this.pos, this.quat, this.scl);
+
+    if (this.data.reticle) {
+      this.data.reticle.object3D.position.copy(this.pos);
+      this.data.reticle.object3D.quaternion.copy(this.quat);
+      this.data.reticle.setAttribute('visible', true);
+    }
+
+    if (!this.hasHit) {
+      this.hasHit = true;
+      this.el.emit('hit-test-found');
+    }
+  },
+
+  place: function () {
+    if (!this.hasHit || !this.data.target) return;
+
+    this.data.target.object3D.position.copy(this.pos);
+    this.data.target.object3D.quaternion.copy(this.quat);
+    this.data.target.setAttribute('visible', true);
+
+    if (!this.placed) {
+      this.placed = true;
+      if (this.data.reticle) this.data.reticle.setAttribute('visible', false);
+      this.el.emit('reef-placed');
+    }
+  },
+
+  rearm: function () {
+    this.placed = false;
+    if (this.data.target) this.data.target.setAttribute('visible', false);
+  }
+});
+
+/* ------------------------------------------------------------
    Scene wiring
    ------------------------------------------------------------ */
 document.addEventListener('DOMContentLoaded', () => {
@@ -146,10 +263,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   scene.addEventListener('enter-vr', () => {
-    if (!scene.is('ar-mode')) return;
+    if (!scene.is('ar-mode')) {
+      note('Session started but not in AR mode.');
+      return;
+    }
     gate.classList.add('is-hidden');
     scanMsg.hidden = false;
     requestAnimationFrame(() => scanMsg.classList.add('is-visible'));
+  });
+
+  // Surface failures on screen rather than leaving a black rectangle.
+  const note = (msg) => {
+    scanMsg.hidden = false;
+    scanMsg.classList.add('is-visible');
+    scanMsg.querySelector('.ar-scan-title').textContent = 'Something went wrong';
+    scanMsg.querySelector('.ar-scan-copy').textContent = msg;
+  };
+
+  scene.addEventListener('enter-vr-error', () => note('The AR session could not start.'));
+  window.addEventListener('error', (e) => {
+    if (scene.is('ar-mode')) note(e.message || 'Unexpected error.');
   });
 
   scene.addEventListener('exit-vr', () => {
@@ -161,43 +294,50 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ---------- hit-test feedback ---------- */
-  // A-Frame's ar-hit-test emits these as it finds and loses surfaces.
-  reticle.addEventListener('ar-hit-test-start', () => {
-    scanMsg.querySelector('.ar-scan-title').textContent = 'Looking for a surface';
-    scanMsg.querySelector('.ar-scan-copy').textContent  = 'Move your phone slowly across the floor.';
+  const placer = document.getElementById('placer');
+
+  const say = (title, copy) => {
+    scanMsg.hidden = false;
+    scanMsg.classList.add('is-visible');
+    scanMsg.querySelector('.ar-scan-title').textContent = title;
+    scanMsg.querySelector('.ar-scan-copy').textContent = copy;
+  };
+
+  placer.addEventListener('hit-test-ready', () => {
+    say('Looking for a surface', 'Move your phone slowly across the floor.');
   });
 
-  reticle.addEventListener('ar-hit-test-achieved', () => {
+  placer.addEventListener('hit-test-found', () => {
     if (placed) return;
-    scanMsg.querySelector('.ar-scan-title').textContent = 'Surface found';
-    scanMsg.querySelector('.ar-scan-copy').textContent  = 'Tap to place the reef.';
+    say('Surface found', 'Tap anywhere to place the reef.');
+    scanMsg.querySelector('.ar-scan-ring').classList.add('is-locked');
+  });
+
+  placer.addEventListener('hit-test-lost', () => {
+    if (placed) return;
+    say('Looking for a surface', 'Move your phone slowly across the floor.');
+    scanMsg.querySelector('.ar-scan-ring').classList.remove('is-locked');
+  });
+
+  placer.addEventListener('hit-test-failed', (ev) => {
+    say('Hit-testing unavailable',
+        (ev.detail && ev.detail.message) || 'This device did not provide a hit-test source.');
   });
 
   /* ---------- placement ---------- */
-  reticle.addEventListener('ar-hit-test-select', (ev) => {
-    const p = ev.detail.position;
-    const r = ev.detail.orientation;
-
-    reef.object3D.position.copy(p);
-    if (r) reef.object3D.quaternion.copy(r);
-    reef.setAttribute('visible', true);
-
-    if (!placed) {
-      placed = true;
-      scanMsg.classList.remove('is-visible');
-      hud.hidden = false;
-      requestAnimationFrame(() => hud.classList.add('is-visible'));
-      // Stop the reticle chasing surfaces once we have a home.
-      reticle.setAttribute('ar-hit-test', 'enabled', false);
-    }
+  placer.addEventListener('reef-placed', () => {
+    placed = true;
+    scanMsg.classList.remove('is-visible');
+    hud.hidden = false;
+    requestAnimationFrame(() => hud.classList.add('is-visible'));
   });
 
   resetBtn.addEventListener('click', () => {
     placed = false;
-    reef.setAttribute('visible', false);
     hud.classList.remove('is-visible');
-    scanMsg.classList.add('is-visible');
-    reticle.setAttribute('ar-hit-test', 'enabled', true);
+    placer.components['hit-test-placer'].rearm();
+    say('Looking for a surface', 'Move your phone slowly across the floor.');
+    scanMsg.querySelector('.ar-scan-ring').classList.remove('is-locked');
   });
 
   /* ---------- temperature ---------- */

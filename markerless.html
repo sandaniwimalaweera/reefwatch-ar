@@ -13,7 +13,7 @@
 
   <link rel="stylesheet" href="css/ar.css">
 </head>
-<body class="ar-body">
+<body class="ar-body xr-page">
 
   <!-- DOM overlay: everything here stays on screen during the AR session -->
   <div id="overlay" class="xr-overlay">
@@ -69,7 +69,7 @@
   <a-scene
     reef-state="celsius: 28"
     webxr="optionalFeatures: hit-test, dom-overlay, local-floor; overlayElement: #overlay"
-    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true"
+    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
 
@@ -84,8 +84,25 @@
     <a-entity light="type: directional; color: #FFFFFF; intensity: 1.0" position="1 3 1"></a-entity>
     <a-entity light="type: directional; color: #5FC6F0; intensity: 0.35" position="-1 1 -1"></a-entity>
 
-    <!-- Reticle: A-Frame's ar-hit-test draws it and reports surfaces -->
-    <a-entity id="reticle" ar-hit-test="enabled: true; type: map; mapSize: 0.6 0.6"></a-entity>
+    <!-- Hit-testing runs here; it drives the reticle and places the reef -->
+    <a-entity id="placer" hit-test-placer="reticle: #reticle; target: #reef"></a-entity>
+
+    <!-- Reticle, hidden until a surface is found -->
+    <a-entity id="reticle" visible="false">
+      <a-ring
+        rotation="-90 0 0"
+        radius-inner="0.075"
+        radius-outer="0.10"
+        material="color: #2ED9B4; shader: flat; opacity: 0.95; side: double"
+        animation="property: scale; to: 1.18 1.18 1.18; dir: alternate; loop: true; dur: 900; easing: easeInOutSine">
+      </a-ring>
+      <a-ring
+        rotation="-90 0 0"
+        radius-inner="0.014"
+        radius-outer="0.024"
+        material="color: #FFF4EA; shader: flat; opacity: 0.9; side: double">
+      </a-ring>
+    </a-entity>
 
     <!-- The reef, hidden until the user taps a surface -->
     <a-entity id="reef" visible="false">

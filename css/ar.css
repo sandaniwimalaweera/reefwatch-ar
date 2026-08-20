@@ -25,16 +25,21 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #000;
 }
 
-/* ---------- Camera feed ----------
-   MindAR injects a <video> for the camera stream. On iOS Safari it
-   is sometimes left unsized or stacked behind an opaque canvas,
-   which shows as a black background with the model floating on it.
-   Pinning it explicitly and forcing the canvas transparent fixes it. */
+.mindar-page { background: #000; }
 
-video {
+/* ---------- Camera feed (marker page only) ----------
+   MindAR injects its own <video> for the camera stream, and on
+   iOS Safari it is left unsized behind an opaque canvas, which
+   shows as a black background with the model floating on it.
+
+   These rules are scoped to .mindar-page. The markerless page
+   gets its camera from the WebXR compositor, not a video
+   element, and forcing canvas geometry there breaks the AR
+   session's own sizing. */
+
+.mindar-page video {
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
@@ -46,9 +51,9 @@ video {
   opacity: 1 !important;
 }
 
-a-scene,
-a-scene .a-canvas,
-canvas.a-canvas {
+.mindar-page a-scene,
+.mindar-page .a-canvas,
+.mindar-page canvas.a-canvas {
   position: fixed !important;
   top: 0;
   left: 0;
@@ -58,14 +63,12 @@ canvas.a-canvas {
   z-index: 1 !important;
 }
 
-/* MindAR's own wrapper can force its own sizing — neutralise it. */
 .mindar-ui-overlay { display: none !important; }
 
-.ar-body {
-  font-family: var(--body);
-  color: var(--bone);
-  -webkit-font-smoothing: antialiased;
-  -webkit-tap-highlight-color: transparent;
+/* The XR page must let the compositor show through. */
+.xr-page,
+.xr-page .a-canvas {
+  background: transparent !important;
 }
 
 /* Overlay chrome must sit above the canvas */
@@ -555,4 +558,11 @@ canvas.a-canvas {
 @media (prefers-reduced-motion: reduce) {
   .ar-scan-ring { animation: none; }
   .hud, .ar-gate, .ar-scan { transition: none; }
+}
+
+/* Reticle lock feedback: the sweeping ring closes into a solid
+   circle once a surface is being tracked. */
+.ar-scan-ring.is-locked {
+  border-color: var(--algae);
+  animation: none;
 }
