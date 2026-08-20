@@ -29,6 +29,20 @@ html, body {
 
 .mindar-page { background: #000; }
 
+/* The XR page needs a background while the gate is showing, but
+   must be fully transparent during the session so the camera
+   passthrough is visible. `.in-ar` is added on enter-vr. */
+.xr-page {
+  background:
+    radial-gradient(120% 80% at 50% -10%, #0E6B7E 0%, transparent 55%),
+    linear-gradient(180deg, #073B4C 0%, #04212B 62%, #021018 100%);
+}
+
+.xr-page.in-ar,
+.xr-page.in-ar .a-canvas {
+  background: transparent !important;
+}
+
 /* ---------- Camera feed (marker page only) ----------
    MindAR injects its own <video> for the camera stream, and on
    iOS Safari it is left unsized behind an opaque canvas, which
@@ -223,6 +237,7 @@ html, body {
 
 .ar-card-name {
   margin: 0 0 0.35rem;
+  color: var(--bone);
   font-family: var(--display);
   font-weight: 700;
   font-size: 1.3rem;
@@ -318,6 +333,7 @@ html, body {
 
 .ar-gate-title {
   margin: 0 0 0.5rem;
+  color: var(--bone);
   font-family: var(--display);
   font-weight: 700;
   font-size: clamp(2.1rem, 9vw, 2.9rem);
@@ -397,6 +413,7 @@ html, body {
 
 .ar-scan-title {
   margin: 0;
+  color: var(--bone);
   font-family: var(--display);
   font-weight: 700;
   font-size: 1.2rem;
@@ -452,6 +469,7 @@ html, body {
 
 .hud-temp {
   margin: 0;
+  color: var(--bone);
   font-family: var(--display);
   font-weight: 700;
   font-size: 1.9rem;
@@ -565,4 +583,13 @@ html, body {
 .ar-scan-ring.is-locked {
   border-color: var(--algae);
   animation: none;
+}
+
+/* A-Frame's own enter-VR/AR button is redundant here — the gate
+   has its own start control. */
+.a-enter-vr,
+.a-enter-ar,
+.a-enter-vr-button,
+.a-enter-ar-button {
+  display: none !important;
 }

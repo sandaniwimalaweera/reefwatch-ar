@@ -251,42 +251,74 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /* ---------- enter AR ---------- */
+  /* ---------- enter AR ----------
+     The gate stays up until the session is confirmed running.
+     Hiding it optimistically leaves a blank screen whenever
+     entry fails. */
   startBtn.addEventListener('click', () => {
-    gate.classList.add('is-hidden');
-    // enterAR exists in current A-Frame; enterVR(true) is the older path.
-    if (typeof scene.enterAR === 'function') {
-      scene.enterAR();
-    } else {
-      scene.enterVR(true);
+    startBtn.disabled = true;
+    startBtn.textContent = 'Starting…';
+
+    let entered = false;
+    const onEntered = () => { entered = true; };
+    scene.addEventListener('enter-vr', onEntered, { once: true });
+
+    try {
+      if (typeof scene.enterAR === 'function') {
+        scene.enterAR();
+      } else {
+        scene.enterVR(true);
+      }
+    } catch (err) {
+      gateFailed(err && err.message);
+      return;
     }
+
+    // If nothing has happened after a few seconds, entry failed
+    // silently — put the user back in control rather than
+    // leaving them on a blank page.
+    setTimeout(() => {
+      if (!entered) gateFailed('The AR session did not start. Your browser may have blocked it, or the device may not support immersive AR.');
+    }, 4000);
   });
+
+  const gateFailed = (msg) => {
+    gate.classList.remove('is-hidden');
+    startBtn.disabled = false;
+    startBtn.textContent = 'Try again';
+    gateTitle.textContent = 'Could not start AR';
+    gateCopy.textContent = msg || 'Something prevented the session from starting.';
+  };
 
   scene.addEventListener('enter-vr', () => {
     if (!scene.is('ar-mode')) {
-      note('Session started but not in AR mode.');
+      gateFailed('The session started in VR mode rather than AR.');
       return;
     }
+    document.body.classList.add('in-ar');
     gate.classList.add('is-hidden');
     scanMsg.hidden = false;
     requestAnimationFrame(() => scanMsg.classList.add('is-visible'));
   });
 
-  // Surface failures on screen rather than leaving a black rectangle.
-  const note = (msg) => {
+  // Surface failures rather than leaving a blank screen.
+  scene.addEventListener('enter-vr-error', () => {
+    gateFailed('The AR session could not start.');
+  });
+
+  window.addEventListener('error', (e) => {
+    if (!scene.is('ar-mode')) return;
     scanMsg.hidden = false;
     scanMsg.classList.add('is-visible');
     scanMsg.querySelector('.ar-scan-title').textContent = 'Something went wrong';
-    scanMsg.querySelector('.ar-scan-copy').textContent = msg;
-  };
-
-  scene.addEventListener('enter-vr-error', () => note('The AR session could not start.'));
-  window.addEventListener('error', (e) => {
-    if (scene.is('ar-mode')) note(e.message || 'Unexpected error.');
+    scanMsg.querySelector('.ar-scan-copy').textContent = e.message || 'Unexpected error.';
   });
 
   scene.addEventListener('exit-vr', () => {
+    document.body.classList.remove('in-ar');
     gate.classList.remove('is-hidden');
+    startBtn.disabled = false;
+    startBtn.textContent = 'Start AR';
     scanMsg.classList.remove('is-visible');
     hud.classList.remove('is-visible');
     placed = false;
