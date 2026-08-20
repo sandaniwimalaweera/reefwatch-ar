@@ -2,16 +2,106 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Place a reef — ReefWatch AR</title>
-  <link rel="stylesheet" href="css/style.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Public+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <link rel="stylesheet" href="css/ar.css">
 </head>
-<body>
-  <main class="shell">
-    <p class="eyebrow">Plane detection</p>
-    <h1 class="wordmark" style="font-size:clamp(2.4rem,10vw,3.4rem)">Place a reef</h1>
-    <p class="thesis">Not built yet. Floor scanning lands on day 4.</p>
-    <p><a class="mode-go" href="index.html">Back</a></p>
-  </main>
+<body class="ar-body">
+
+  <!-- DOM overlay: everything here stays on screen during the AR session -->
+  <div id="overlay" class="xr-overlay">
+
+    <!-- Entry gate, shown before the session starts -->
+    <div class="ar-gate" id="gate">
+      <div class="ar-gate-inner">
+        <p class="ar-gate-eyebrow">Plane detection</p>
+        <h1 class="ar-gate-title" id="gateTitle">Place a reef</h1>
+        <p class="ar-gate-copy" id="gateCopy">
+          Scan your floor, then tap to drop a reef section into the room at real
+          scale. Sea temperature decides whether it keeps its colour.
+        </p>
+        <button class="ar-btn" id="start">Start AR</button>
+        <a class="ar-gate-alt" href="index.html">Back</a>
+      </div>
+    </div>
+
+    <!-- Scanning guidance -->
+    <div class="ar-scan" id="scan" hidden>
+      <div class="ar-scan-ring" aria-hidden="true"></div>
+      <p class="ar-scan-title">Looking for a surface</p>
+      <p class="ar-scan-copy">Move your phone slowly across the floor.</p>
+    </div>
+
+    <!-- Live readout and temperature control -->
+    <div class="hud" id="hud" hidden>
+      <div class="hud-top">
+        <div>
+          <p class="hud-key">Sea surface</p>
+          <p class="hud-temp" id="hudTemp">28.0 °C</p>
+        </div>
+        <p class="hud-state is-good" id="hudState">Healthy</p>
+      </div>
+
+      <p class="hud-site" id="hudSite">Manual control</p>
+
+      <label class="hud-slider">
+        <span class="hud-slider-head">
+          <span>Water temperature</span>
+          <span id="tempVal">28.0 °C</span>
+        </span>
+        <input type="range" id="temp" min="26" max="33" step="0.1" value="28">
+        <span class="hud-scale"><span>26°</span><span>29°</span><span>33°</span></span>
+      </label>
+
+      <button class="hud-reset" id="reset">Move reef</button>
+    </div>
+
+    <a class="ar-back" href="index.html">Back</a>
+  </div>
+
+  <a-scene
+    reef-state="celsius: 28"
+    webxr="optionalFeatures: hit-test, dom-overlay, local-floor; overlayElement: #overlay"
+    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <a-assets>
+      <a-asset-item id="reefModel" src="assets/models/reef.glb"></a-asset-item>
+    </a-assets>
+
+    <a-camera position="0 1.6 0"></a-camera>
+
+    <!-- Sunlight filtered through water -->
+    <a-entity light="type: ambient; color: #BFE4F0; intensity: 0.8"></a-entity>
+    <a-entity light="type: directional; color: #FFFFFF; intensity: 1.0" position="1 3 1"></a-entity>
+    <a-entity light="type: directional; color: #5FC6F0; intensity: 0.35" position="-1 1 -1"></a-entity>
+
+    <!-- Reticle: A-Frame's ar-hit-test draws it and reports surfaces -->
+    <a-entity id="reticle" ar-hit-test="enabled: true; type: map; mapSize: 0.6 0.6"></a-entity>
+
+    <!-- The reef, hidden until the user taps a surface -->
+    <a-entity id="reef" visible="false">
+      <a-entity
+        gltf-model="#reefModel"
+        fit-model="size: 0.9"
+        bleachable
+        temperature-driven>
+      </a-entity>
+      <a-entity marine-snow="count: 60; spread: 1.4; top: 1.1"></a-entity>
+      <a-entity caustic-light></a-entity>
+    </a-entity>
+
+  </a-scene>
+
+  <script src="js/lib-reef.js"></script>
+  <script src="js/xr-scene.js"></script>
 </body>
 </html>
