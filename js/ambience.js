@@ -47,9 +47,28 @@
     const AudioCtx = global.AudioContext || global.webkitAudioContext;
     if (!AudioCtx) return Promise.reject(new Error('Web Audio not supported'));
 
-    this.ctx = new AudioCtx();
+        this.ctx = new AudioCtx();
+
+    /* iOS routes Web Audio through the "ambient" session, which the
+       hardware silent switch mutes. Declaring playback intent moves
+       it to a session that ignores the switch. Safari 16.4+ only. */
+    try {
+      if (global.navigator.audioSession) {
+        global.navigator.audioSession.type = 'playback';
+      }
+    } catch (err) {
+      /* Not fatal — audio still plays with the switch off. */
+    }
 
     const ctx = this.ctx;
+
+    /* iOS keeps a context suspended until a zero-length buffer has
+       been played from inside a user gesture. Harmless elsewhere. */
+    const unlock = ctx.createBufferSource();
+    unlock.buffer = ctx.createBuffer(1, 1, 22050);
+    unlock.connect(ctx.destination);
+    unlock.start(0);
+    
     const master = ctx.createGain();
     master.gain.value = 0;
     master.connect(ctx.destination);
@@ -100,10 +119,10 @@
 
     this.running = true;
 
-    // Autoplay policy: the context may start suspended even when
-    // created inside a gesture handler on some browsers.
-    if (ctx.state === 'suspended') return ctx.resume();
-    return Promise.resolve();
+    // Resume unconditionally. iOS can suspend a context immediately
+    // after creation even when created inside a gesture, and resuming
+    // a running context is a no-op.
+    return ctx.resume().catch(() => {});
   };
 
   /* Snapping shrimp are the loudest thing on a healthy reef and
@@ -183,6 +202,16 @@
                         : this.start().then(() => true);
   };
 
-  global.ReefAmbience = new Ambience();
+    global.ReefAmbience = new Ambience();
+
+  /* iOS suspends the context when the page is backgrounded or when
+     the camera stream starts. Resume it when we come back. */
+  document.addEventListener('visibilitychange', function () {
+    const inst = global.ReefAmbience;
+    if (document.visibilityState === 'visible' &&
+        inst.running && inst.ctx && inst.ctx.state === 'suspended') {
+      inst.ctx.resume().catch(() => {});
+    }
+  });
 
 })(window);
