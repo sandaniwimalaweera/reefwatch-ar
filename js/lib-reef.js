@@ -21,12 +21,25 @@ AFRAME.registerComponent('fit-model', {
     lift: { type: 'number', default: 0.0 }
   },
 
-  init: function () {
+   init: function () {
+    this.tries = 0;
+
     // The model may already be attached by the time this component
     // initialises — a-asset-item preloading makes that race real —
     // so check for it as well as listening for the event.
-    this.el.addEventListener('model-loaded', () => this.fit());
-    if (this.el.getObject3D('mesh')) this.fit();
+    this.el.addEventListener('model-loaded', () => this.attempt());
+    if (this.el.getObject3D('mesh')) this.attempt();
+  },
+
+  // Draco geometry decodes asynchronously, so the first measurement
+  // can come back empty. Retry until the box is real, rather than
+  // silently leaving the model at its raw export size.
+  attempt: function () {
+    if (this.done) return;
+    this.fit();
+    if (!this.done && this.tries++ < 40) {
+      setTimeout(() => this.attempt(), 100);
+    }
   },
 
   fit: function () {
@@ -49,8 +62,11 @@ AFRAME.registerComponent('fit-model', {
 
     const span = new THREE.Vector3();
     box.getSize(span);
-    const largest = Math.max(span.x, span.y, span.z);
-    if (!largest || !isFinite(largest)) return;
+       const largest = Math.max(span.x, span.y, span.z);
+    if (!largest || !isFinite(largest)) {
+      console.warn('[fit-model] bounding box not ready', span);
+      return;
+    }
 
     const factor = this.data.size / largest;
     obj.scale.setScalar(factor);
