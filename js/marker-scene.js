@@ -97,8 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Fish react to bleaching — they scatter and fade as it advances.
   scene.addEventListener('reef-bleach-progress', (ev) => {
-    document.querySelectorAll('[reef-fish]').forEach((el) => {
-      const comp = el.components['reef-fish'];
+        document.querySelectorAll('[reef-school]').forEach((el) => {
+      const comp = el.components['reef-school'];
       if (comp && comp.setScatter) comp.setScatter(ev.detail.amount);
     });
   });
