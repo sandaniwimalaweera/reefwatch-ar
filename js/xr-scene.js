@@ -487,16 +487,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // iOS 13+ gates DeviceOrientation behind an explicit request that
   // must originate from a user gesture.
-  function requestMotionPermission () {
+   function requestMotionPermission () {
     const DOE = window.DeviceOrientationEvent;
     if (!DOE || typeof DOE.requestPermission !== 'function') {
+      enableMagicWindow();
       return Promise.resolve();
     }
     return DOE.requestPermission().then((state) => {
       if (state !== 'granted') {
         throw new Error('Motion access was denied. Allow it and try again.');
       }
+      enableMagicWindow();
     });
+  }
+
+  /* look-controls keeps magic-window tracking switched off on iOS
+     until it is told permission was granted. It normally learns this
+     from device-orientation-permission-ui, which this scene disables
+     in order to ask at a moment of its own choosing. Without this
+     handshake the camera never rotates, so the reef appears welded
+     to the screen instead of staying where it was placed. */
+  function enableMagicWindow () {
+    scene.emit('deviceorientationpermissiongranted');
+
+    const cam = document.querySelector('a-camera');
+    const lc  = cam && cam.components['look-controls'];
+    if (lc && lc.magicWindowControls) {
+      lc.magicWindowControls.enabled = true;
+    }
   }
 
   /* ---------- WebXR session events ---------- */
