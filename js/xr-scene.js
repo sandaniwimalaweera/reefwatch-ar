@@ -147,13 +147,27 @@ AFRAME.registerComponent('hit-test-placer', {
     });
   },
 
-  tick: function () {
+    tick: function () {
     const sceneEl = this.el.sceneEl;
     const frame = sceneEl.frame;
-    if (!frame || !this.source || this.placed) return;
+    if (!frame || !this.source) return;
 
     const refSpace = sceneEl.renderer.xr.getReferenceSpace();
     if (!refSpace) return;
+
+    // Once placed, the only job left is to follow the anchor.
+    if (this.placed) {
+      if (this.anchor && this.data.target) {
+        const pose = frame.getPose(this.anchor.anchorSpace, refSpace);
+        if (pose) {
+          this.matrix.fromArray(pose.transform.matrix);
+          this.matrix.decompose(this.pos, this.quat, this.scl);
+          this.data.target.object3D.position.copy(this.pos);
+          this.data.target.object3D.quaternion.copy(this.quat);
+        }
+      }
+      return;
+    }
 
     const results = frame.getHitTestResults(this.source);
 
@@ -165,6 +179,8 @@ AFRAME.registerComponent('hit-test-placer', {
       }
       return;
     }
+
+        this.lastHit = results[0];
 
     const pose = results[0].getPose(refSpace);
     if (!pose) return;
@@ -184,12 +200,28 @@ AFRAME.registerComponent('hit-test-placer', {
     }
   },
 
-  place: function () {
+    place: function () {
     if (!this.hasHit || !this.data.target) return;
 
     this.data.target.object3D.position.copy(this.pos);
     this.data.target.object3D.quaternion.copy(this.quat);
     this.data.target.setAttribute('visible', true);
+
+    /* Writing the pose once is not enough. The runtime continuously
+       refines its estimate of the world as it sees more of the room,
+       so a position captured in one frame slowly disagrees with the
+       same physical point later — the reef appears to slide.
+
+       An anchor hands that problem to the platform: it tracks the
+       physical point and reports a corrected pose every frame. */
+    if (this.lastHit && this.lastHit.createAnchor) {
+      this.lastHit.createAnchor().then((anchor) => {
+        this.anchor = anchor;
+      }).catch(() => {
+        /* Anchors are optional. Without them the static pose above
+           still holds; it just drifts more on long sessions. */
+      });
+    }
 
     if (!this.placed) {
       this.placed = true;
@@ -198,8 +230,10 @@ AFRAME.registerComponent('hit-test-placer', {
     }
   },
 
-  rearm: function () {
+    rearm: function () {
     this.placed = false;
+    if (this.anchor && this.anchor.delete) this.anchor.delete();
+    this.anchor = null;
     if (this.data.target) this.data.target.setAttribute('visible', false);
   }
 });
