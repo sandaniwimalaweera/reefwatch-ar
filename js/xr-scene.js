@@ -965,6 +965,15 @@ document.addEventListener('DOMContentLoaded', () => {
     hudState.className    = 'hud-state is-' + label.tone;
   });
 
+    // The school thins and disperses as the water warms, so the
+  // slider drives behaviour as well as colour.
+  scene.addEventListener('temperature-change', (ev) => {
+    document.querySelectorAll('[reef-school]').forEach((el) => {
+      const comp = el.components['reef-school'];
+      if (comp && comp.setScatter) comp.setScatter(ev.detail.bleach);
+    });
+  });
+
   /* ---------- live data ----------
      The slider stays available either way, so the user can explore
      temperatures the sea is not currently at. The HUD always says
