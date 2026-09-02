@@ -269,9 +269,19 @@ AFRAME.registerComponent('hit-test-placer', {
      assumed eye height      → a ground plane at y = 0
      ray/plane intersection  → where the user is pointing
 
-   Honest limitation: there is no positional tracking. Rotation
-   is tracked, translation is not, so walking toward the reef
-   does not close the distance. Recorded in docs/TESTING.md.
+   Orientation is read and applied here rather than left to
+   look-controls' magic-window mode. That mode only switches on
+   after a handshake with device-orientation-permission-ui, which
+   this scene disables so it can ask for motion access at a moment
+   of its own choosing; when the handshake does not complete the
+   camera never rotates and the reef appears welded to the screen.
+   Driving the camera directly removes that failure mode and makes
+   the tracking pipeline explicit.
+
+   Honest limitation: there is no positional tracking. Rotation is
+   tracked, translation is not, so the reef holds its place when the
+   phone turns but follows the user if they walk. Only WebXR gives
+   true six degrees of freedom. Recorded in docs/TESTING.md.
    ------------------------------------------------------------ */
 AFRAME.registerComponent('sensor-ar', {
   schema: {
@@ -279,19 +289,46 @@ AFRAME.registerComponent('sensor-ar', {
     target:    { type: 'selector' },
     eyeHeight: { type: 'number', default: 1.4 },   // metres
     maxRange:  { type: 'number', default: 6.0 },
-    minRange:  { type: 'number', default: 0.6 }
+    minRange:  { type: 'number', default: 0.6 },
+
+    /* Assumed field of view of the rear camera, in degrees, across
+       the long edge of the frame it delivers. No browser API reports
+       this, and getting it wrong is what makes a rotation-tracked
+       overlay slide across the room: if the virtual camera is wider
+       than the real one, the reef sweeps faster than the floor
+       underneath it. 65° is typical of a phone's main rear lens. */
+    cameraFov: { type: 'number', default: 65 }
   },
 
   init: function () {
     this.active = false;
     this.hasGround = false;
     this.placed = false;
+    this.tracking = false;
+    this.eventName = null;      // which orientation event won the race
 
-    this.dir = new THREE.Vector3();
-    this.camPos = new THREE.Vector3();
-    this.point = new THREE.Vector3();
+    this.dir     = new THREE.Vector3();
+    this.camPos  = new THREE.Vector3();
+    this.point   = new THREE.Vector3();
     this.forward = new THREE.Vector3(0, 0, -1);
-    this.camQuat = new THREE.Quaternion();
+
+    this.orientation = new THREE.Quaternion();
+    this.euler   = new THREE.Euler();
+    this.screenQ = new THREE.Quaternion();
+    this.zAxis   = new THREE.Vector3(0, 0, 1);
+
+    /* DeviceOrientation describes the screen's frame. The camera
+       looks out of the back of the phone, which is that frame
+       rotated -90° about X. */
+    this.deviceToCamera = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+
+    this.onOrientation = this.onOrientation.bind(this);
+    this.onResize = this.onResize.bind(this);
+  },
+
+  cameraEl: function () {
+    const cam = this.el.sceneEl.camera;
+    return cam && cam.el;
   },
 
   start: function () {
@@ -315,16 +352,143 @@ AFRAME.registerComponent('sensor-ar', {
 
       return video.play();
     }).then(() => {
+      this.takeCamera();
+
+      /* Android fires `deviceorientationabsolute` with a compass-
+         referenced heading, which drifts far less over a session.
+         iOS only fires `deviceorientation`. Listen for both and keep
+         whichever arrives first with usable angles. */
+      window.addEventListener('deviceorientationabsolute', this.onOrientation);
+      window.addEventListener('deviceorientation', this.onOrientation);
+      window.addEventListener('resize', this.onResize);
+      this.video.addEventListener('loadedmetadata', this.onResize);
+      if (screen.orientation) {
+        screen.orientation.addEventListener('change', this.onResize);
+      }
+
       this.active = true;
       document.body.classList.add('in-sensor-ar');
       el.emit('sensor-ar-started');
+
+      /* A phone that reports no orientation at all and a phone with
+         no positional tracking look completely different on screen
+         but are easy to confuse in a bug report, so say which it is. */
+      this.watchdog = setTimeout(() => {
+        if (this.active && !this.tracking) {
+          el.emit('tracking-status', { state: 'no motion data' });
+        }
+      }, 1500);
     });
+  },
+
+  /* look-controls writes the camera's rotation every tick from its
+     own pitch and yaw objects, which would immediately overwrite the
+     pose set below. It is removed for the duration of the session
+     and restored on the way out. */
+  takeCamera: function () {
+    const camEl = this.cameraEl();
+    if (!camEl) return;
+
+    // Called again from tick if the camera was not ready at start.
+    if (this.savedLookControls === undefined) {
+      this.savedLookControls = camEl.getAttribute('look-controls');
+      const camData = camEl.getAttribute('camera');
+      this.savedFov = camData && camData.fov;
+    }
+
+    camEl.removeAttribute('look-controls');
+    camEl.object3D.position.set(0, this.data.eyeHeight, 0);
+    this.onResize();
+  },
+
+  releaseCamera: function () {
+    const camEl = this.cameraEl();
+    if (!camEl) return;
+
+    if (this.savedFov) camEl.setAttribute('camera', 'fov', this.savedFov);
+    if (this.savedLookControls) {
+      camEl.setAttribute('look-controls', this.savedLookControls);
+    }
+  },
+
+  /* Match the virtual camera's field of view to the visible part of
+     the camera feed. The feed is drawn with `object-fit: cover`, so
+     it is scaled until it fills the screen and the overflow is
+     cropped — the visible vertical angle is therefore smaller than
+     the lens actually captures, and that is the angle the renderer
+     has to reproduce for the reef to stay glued to the floor. */
+  onResize: function () {
+    const camEl = this.cameraEl();
+    const video = this.video;
+    if (!camEl || !video || !video.videoWidth) return;
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    const w  = window.innerWidth;
+    const h  = window.innerHeight;
+
+    const longSide  = Math.max(vw, vh);
+    const shortSide = Math.min(vw, vh);
+
+    const fovLong  = THREE.MathUtils.degToRad(this.data.cameraFov);
+    const fovShort = 2 * Math.atan(Math.tan(fovLong / 2) * (shortSide / longSide));
+    const fovFullV = (vh >= vw) ? fovLong : fovShort;
+
+    // Fraction of the frame's height that survives the crop.
+    const scale   = Math.max(w / vw, h / vh);
+    const visible = Math.min(1, (h / scale) / vh);
+
+    const fovV = 2 * Math.atan(Math.tan(fovFullV / 2) * visible);
+    camEl.setAttribute('camera', 'fov', THREE.MathUtils.radToDeg(fovV));
+  },
+
+  onOrientation: function (ev) {
+    if (ev.alpha === null || ev.alpha === undefined) return;
+
+    /* The first usable event decides which stream to trust. Mixing
+       the absolute and relative streams would make the yaw jump. */
+    if (this.eventName === null) this.eventName = ev.type;
+    if (ev.type !== this.eventName) return;
+
+    const alpha = THREE.MathUtils.degToRad(ev.alpha);
+    const beta  = THREE.MathUtils.degToRad(ev.beta  || 0);
+    const gamma = THREE.MathUtils.degToRad(ev.gamma || 0);
+
+    let angle = 0;
+    if (screen.orientation && typeof screen.orientation.angle === 'number') {
+      angle = THREE.MathUtils.degToRad(screen.orientation.angle);
+    } else if (typeof window.orientation === 'number') {
+      angle = THREE.MathUtils.degToRad(window.orientation);
+    }
+
+    this.euler.set(beta, alpha, -gamma, 'YXZ');
+    this.orientation.setFromEuler(this.euler);
+    this.orientation.multiply(this.deviceToCamera);
+    this.orientation.multiply(this.screenQ.setFromAxisAngle(this.zAxis, -angle));
+
+    if (!this.tracking) {
+      this.tracking = true;
+      clearTimeout(this.watchdog);
+      this.el.emit('tracking-status', { state: 'rotation only' });
+    }
   },
 
   stop: function () {
     this.active = false;
     this.placed = false;
     this.hasGround = false;
+    this.tracking = false;
+    this.eventName = null;
+    clearTimeout(this.watchdog);
+
+    window.removeEventListener('deviceorientationabsolute', this.onOrientation);
+    window.removeEventListener('deviceorientation', this.onOrientation);
+    window.removeEventListener('resize', this.onResize);
+    if (this.video) this.video.removeEventListener('loadedmetadata', this.onResize);
+    if (screen.orientation) {
+      screen.orientation.removeEventListener('change', this.onResize);
+    }
+    this.releaseCamera();
 
     if (this.stream) {
       this.stream.getTracks().forEach((t) => t.stop());
@@ -338,14 +502,24 @@ AFRAME.registerComponent('sensor-ar', {
   },
 
   tick: function () {
-    if (!this.active || this.placed) return;
+    if (!this.active) return;
 
-    const cam = this.el.sceneEl.camera;
-    if (!cam) return;
+    const camEl = this.cameraEl();
+    if (!camEl) return;
+    if (camEl.components['look-controls']) this.takeCamera();
 
-    cam.getWorldPosition(this.camPos);
-    cam.getWorldQuaternion(this.camQuat);
-    this.dir.copy(this.forward).applyQuaternion(this.camQuat);
+    /* The camera is held at the assumed eye height and turned by the
+       device's own orientation. Nothing else writes to it while the
+       session runs, so the world stays put when the phone turns —
+       which is what makes the reef look placed on the floor rather
+       than painted on the screen. */
+    if (this.tracking) camEl.object3D.quaternion.copy(this.orientation);
+    camEl.object3D.position.set(0, this.data.eyeHeight, 0);
+
+    if (this.placed) return;
+
+    this.el.sceneEl.camera.getWorldPosition(this.camPos);
+    this.dir.copy(this.forward).applyQuaternion(this.orientation);
 
     // Only meaningful when the phone is tilted downward; otherwise
     // the ray never meets the ground plane.
@@ -422,6 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let placed = false;
   let mode = null;          // 'webxr' | 'sensor'
   let siteLabel = 'Manual control';
+  let trackingLabel = null;
 
   /* ---------- messaging helpers ---------- */
 
@@ -481,7 +656,8 @@ document.addEventListener('DOMContentLoaded', () => {
       startBtn.textContent = 'Start camera view';
       gateCopy.textContent =
         'This device cannot run WebXR, so the reef is placed using the camera and ' +
-        'motion sensors instead. Point the phone down at the floor and tap to place it.';
+        'motion sensors instead. Point the phone down at the floor and tap to place it. ' +
+        'Turn on the spot to look around it \u2014 walking is not tracked without WebXR.';
     }
   });
 
@@ -531,40 +707,25 @@ document.addEventListener('DOMContentLoaded', () => {
       .then(() => {
         gate.classList.add('is-hidden');
         say('Point at the floor', 'Tilt your phone down until the ring appears, then tap to place the reef.');
+        if (trackingLabel) hudSite.textContent = siteLabel + ' \u00B7 ' + trackingLabel;
       })
       .catch((err) => gateFailed(describe(err)));
   }
 
-  // iOS 13+ gates DeviceOrientation behind an explicit request that
-  // must originate from a user gesture.
+  /* iOS 13+ gates DeviceOrientation behind an explicit request that
+     must originate from a user gesture. Without it no orientation
+     events ever arrive, the camera never turns, and the reef looks
+     stuck to the screen rather than to the floor. */
   function requestMotionPermission () {
     const DOE = window.DeviceOrientationEvent;
     if (!DOE || typeof DOE.requestPermission !== 'function') {
-      enableMagicWindow();
       return Promise.resolve();
     }
     return DOE.requestPermission().then((state) => {
       if (state !== 'granted') {
         throw new Error('Motion access was denied. Allow it and try again.');
       }
-      enableMagicWindow();
     });
-  }
-
-  /* look-controls keeps magic-window tracking switched off on iOS
-     until it is told permission was granted. It normally learns this
-     from device-orientation-permission-ui, which this scene disables
-     in order to ask at a moment of its own choosing. Without this
-     handshake the camera never rotates, so the reef appears welded
-     to the screen instead of staying where it was placed. */
-  function enableMagicWindow () {
-    scene.emit('deviceorientationpermissiongranted');
-
-    const cam = document.querySelector('a-camera');
-    const lc  = cam && cam.components['look-controls'];
-    if (lc && lc.magicWindowControls) {
-      lc.magicWindowControls.enabled = true;
-    }
   }
 
   /* ---------- WebXR session events ---------- */
@@ -623,6 +784,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (placed) return;
     say('Point at the floor', 'Tilt your phone down until the ring appears.');
     lockRing(false);
+  });
+
+  /* The sensor path tracks rotation but not translation, so the reef
+     stays put when the phone turns and follows the user if they walk.
+     That is a constraint of the fallback rather than a bug, so the HUD
+     states it in the same place the WebXR path states its anchor
+     status. A phone reporting no orientation at all is a different
+     failure and needs saying out loud. */
+  sensor.addEventListener('tracking-status', (ev) => {
+    trackingLabel = ev.detail.state;
+    hudSite.textContent = siteLabel + ' \u00B7 ' + trackingLabel;
+
+    if (trackingLabel === 'no motion data') {
+      say('No motion data',
+          'This phone is not reporting its orientation, so the reef cannot ' +
+          'hold its place. Check motion access in the browser settings.');
+    }
   });
 
   /* ---------- placement ---------- */
@@ -685,7 +863,9 @@ document.addEventListener('DOMContentLoaded', () => {
       else                      source = 'seasonal average';
 
       siteLabel = reading.site + ' \u00B7 ' + source;
-      hudSite.textContent = siteLabel;
+      hudSite.textContent = trackingLabel
+        ? siteLabel + ' \u00B7 ' + trackingLabel
+        : siteLabel;
       hudSite.classList.toggle('is-stale', reading.offline);
 
       slider.value = reading.celsius;

@@ -129,9 +129,10 @@
       <a-asset-item id="reefModel" src="assets/models/reef.glb"></a-asset-item>
     </a-assets>
 
-    <!-- In a WebXR session the device supplies the pose. Outside one,
-         look-controls' magic-window mode reads DeviceOrientation, which
-         is what drives the sensor fallback. Eye height is assumed so a
+    <!-- In a WebXR session the device supplies the pose. In the sensor
+         fallback the sensor-ar component takes the camera over and
+         drives it from DeviceOrientation itself, removing look-controls
+         for the duration of the session. Eye height is assumed so a
          ground plane can be estimated. -->
     <a-camera
       position="0 1.4 0"
@@ -148,7 +149,13 @@
     <!-- Two tracking paths. Whichever the device supports is used;
          see the capability check in js/xr-scene.js. -->
     <a-entity id="placer" hit-test-placer="reticle: #reticle; target: #reef"></a-entity>
-    <a-entity id="sensor" sensor-ar="reticle: #reticle; target: #reef; eyeHeight: 1.4"></a-entity>
+    <!-- cameraFov is the assumed field of view of this phone's rear
+         lens across the long edge of the frame it delivers. No API
+         reports it. If the reef slides across the floor as the phone
+         turns, this number is wrong: raise it if the reef lags behind
+         the floor, lower it if it runs ahead. -->
+    <a-entity id="sensor"
+      sensor-ar="reticle: #reticle; target: #reef; eyeHeight: 1.4; cameraFov: 65"></a-entity>
 
     <!-- Reticle, hidden until a surface is found -->
     <a-entity id="reticle" visible="false">
