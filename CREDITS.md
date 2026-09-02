@@ -26,6 +26,7 @@ you download it - do not leave this until the end.
 |---|---|---|---|
 | A-Frame | *(fill in)* | MIT | 3D scene graph and rendering |
 | MindAR | *(fill in)* | MIT | Image target tracking |
+| &lt;model-viewer&gt; | 3.5.0 | Apache 2.0 | Converts the reef to USDZ and hands it to AR Quick Look (ARKit) on iOS, Scene Viewer on Android |
 
 ## Data
 

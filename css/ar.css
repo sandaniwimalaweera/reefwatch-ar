@@ -365,6 +365,69 @@ html, body {
 
 .ar-btn:active { transform: translateY(1px); }
 
+/* ---------- ARKit hand-off ----------
+   The <model-viewer> that converts the reef to USDZ has to have a
+   layout box before it will load the model, so it is a single
+   transparent pixel rather than display:none. */
+.arkit-viewer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.ar-btn-alt {
+  display: none;
+  margin-top: 0.7rem;
+  padding: 0.72rem 1.4rem;
+  border: 1px solid var(--living);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--living);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.ar-btn-alt.is-available { display: inline-block; }
+.ar-btn-alt:active { transform: translateY(1px); }
+
+.ar-gate-arkit {
+  display: none;
+  margin: 0.5rem 0 0;
+  max-width: 30ch;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: rgba(255, 244, 234, 0.55);
+}
+
+.ar-gate-arkit.is-shown { display: block; }
+
+.hud-arkit {
+  display: none;
+  margin-top: 0.9rem;
+  margin-left: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--living);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--living);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.hud-arkit.is-available { display: inline-block; }
+
 .ar-gate-alt {
   margin-top: 1rem;
   font-family: var(--mono);

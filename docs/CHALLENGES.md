@@ -133,6 +133,64 @@ the assumed lens angle without editing the page.
 
 ---
 
+## Challenge 3: Sensor tracking is not anchoring, and on iOS it cannot be
+
+**Date:** 2026-09-02
+
+**Symptom:** Even with the camera turning correctly and the yaw held on the
+compass, the reef in the markerless view did not stay where it was put. Walking
+towards it did not close the distance; walking sideways took it along.
+
+**Cause:** Not a bug. The sensor fallback measures orientation and nothing
+else. There is no way to measure translation from a phone's sensors alone —
+integrating the accelerometer twice drifts by metres within seconds, which is
+the whole reason ARKit and ARCore fuse the camera with the IMU and run SLAM.
+Safari on iOS exposes neither: no WebXR, no `immersive-ar`, no route from
+JavaScript to ARKit, and no published Apple timeline for one. So on iPhone the
+in-page view has a hard ceiling at three degrees of freedom, and no amount of
+work on `sensor-ar` moves it.
+
+**What I tried that failed:** Treating it as a tuning problem — field of view,
+compass correction, an arm model for the arc a hand-held phone sweeps through.
+All of them are real improvements and all of them are still rotation. None of
+them can make walking work.
+
+**Solution:** Stop trying to do it in the page and hand the model to the
+operating system. AR Quick Look is a native viewer built on ARKit, and Safari
+launches it from a link marked `rel="ar"` pointing at a USDZ. `js/arkit.js`
+uses `<model-viewer>` to convert the reef GLB to USDZ on the fly and call
+`activateAR()`, which on iOS gets visual-inertial SLAM, real plane detection
+and true world anchoring, and on Android resolves to Scene Viewer or WebXR
+instead — one button for every device with native AR.
+
+Two details cost time:
+
+- The source model is 9 m across and floats 0.68 m above its own origin. In
+  the scene `fit-model` normalises that at runtime, but Quick Look gets the
+  file as it is, so `ar-scale: fixed` dropped a nine-metre reef hovering in
+  the room. `assets/models/reef-ar.glb` is the same mesh under a baked root
+  transform applying the identical rule: longest edge 1.25 m, base on y = 0.
+- `activateAR()` has to be called straight from the tap. Awaiting anything
+  first loses the user gesture and Safari offers a download instead of the
+  viewer.
+
+The bleaching still tracks the temperature. The reef's one material is
+untextured, so `baseColorFactor` *is* the colour, and the same curve
+`bleachable` uses — lerp toward bone, roughness up, metalness down — is
+written straight onto the model-viewer material before the hand-off. The
+converted colours are linear rather than sRGB, so `#FFF6EC` is converted once
+in `js/arkit.js` rather than at every slider movement.
+
+**Result:** Two honest paths on the same page. The in-page sensor view is
+interactive, keeps the live temperature slider, and holds its bearing as the
+phone turns. The ARKit view tracks properly as the user walks around the reef,
+at the cost of being Apple's viewer with the temperature frozen at whatever
+the page was showing. The comparison between them is itself evidence for the
+report: the same model and the same data, with and without SLAM, on a device
+that cannot run WebXR at all.
+
+---
+
 # Asset optimisation record
 
 Fill this in on day 2. These numbers are direct evidence for the

@@ -35,6 +35,13 @@
         </p>
         <p class="ar-gate-note" id="gateNote">Checking device capability…</p>
         <button class="ar-btn" id="start">Start</button>
+
+        <!-- Hands the reef to ARKit through AR Quick Look. This is the
+             only route to six-degrees-of-freedom tracking on iOS, where
+             Safari implements no WebXR at all. -->
+        <button class="ar-btn-alt" id="arkitStart" type="button">Open in ARKit</button>
+        <p class="ar-gate-arkit" id="arkitNote"></p>
+
         <a class="ar-gate-alt" href="index.html">Back</a>
         <button class="credits-open" id="creditsOpen" type="button">Credits</button>
       </div>
@@ -69,6 +76,7 @@
       </label>
 
       <button class="hud-reset" id="reset">Move reef</button>
+      <button class="hud-arkit" id="arkitOpen" type="button">ARKit · 6DoF</button>
     </div>
 
     <a class="ar-back" href="index.html">Back</a>
@@ -104,8 +112,11 @@
       <p>Coral and reef models by rkuhlf, via Sketchfab, CC&nbsp;BY&nbsp;4.0.</p>
 
       <h3>Libraries</h3>
-      <p>A-Frame and MindAR, both MIT licensed. Fish, particles and the
-         ambience are generated procedurally in code.</p>
+      <p>A-Frame and MindAR, both MIT licensed.
+         <a href="https://modelviewer.dev/" target="_blank" rel="noopener">&lt;model-viewer&gt;</a>
+         by Google, Apache&nbsp;2.0, used to hand the reef to ARKit through
+         AR Quick Look on iOS and to Scene Viewer on Android.
+         Fish, particles and the ambience are generated procedurally in code.</p>
 
       <h3>Built for</h3>
       <p>INTE 42312 — Virtual and Augmented Reality.</p>
@@ -193,6 +204,7 @@
 
   </a-scene>
 
+  <script src="js/arkit.js"></script>
   <script src="js/ambience.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/lib-reef.js"></script>

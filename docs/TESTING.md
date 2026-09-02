@@ -61,11 +61,38 @@ within seconds, which is precisely the problem SLAM exists to solve. The app
 states this in the gate copy before the session starts and in the HUD, which
 reads `rotation only` on this path against `anchored` on the WebXR path.
 
-Where genuine six-degree-of-freedom placement is needed on iOS, the routes are
-AR Quick Look with a `.usdz` export, which hands off to Apple's own viewer and
-loses the temperature control, or a commercial SLAM library such as 8th Wall.
-Neither is a browser API. The marker page is the stable-tracking path in this
-project on any device.
+### The ARKit path, which does anchor properly
+
+Because that ceiling is real, the markerless page also hands the reef to ARKit
+rather than pretending the sensor fallback is equivalent. `js/arkit.js` puts an
+**Open in ARKit** button on the gate and an **ARKit · 6DoF** button in the HUD.
+Both go through `<model-viewer>`, which converts `assets/models/reef-ar.glb` to
+USDZ on the fly and launches AR Quick Look — a native viewer built on ARKit.
+
+| | In-page sensor view | ARKit via Quick Look |
+|---|---|---|
+| Tracking | Rotation only | Full six degrees of freedom |
+| Walking around the reef | Reef follows the user | Reef stays put |
+| Plane detection | Assumed floor at y = 0 | Real, from ARKit |
+| Temperature slider | Live | Fixed at whatever was set before opening |
+| Lives in the page | Yes | No — Apple's viewer takes over |
+
+`reef-ar.glb` is the same mesh as `reef.glb` under a baked root transform:
+longest edge 1.25 m, base on y = 0, matching what `fit-model` does at runtime
+in the scene. The source model is 9 m across and floats 0.68 m above its own
+origin, so without it `ar-scale: fixed` would drop a nine-metre reef hovering
+in the room. Regenerate it if `fit-model`'s `size` changes.
+
+Test both. The point of the comparison is the report: the same reef, the same
+data, one path with visual-inertial SLAM and one without, and the difference
+visible on a phone that cannot run WebXR at all.
+
+Note that Chrome and Firefox on iOS will not launch Quick Look from a
+generated USDZ — only Safari does. The button says so rather than failing
+silently. On Android the same button resolves to Scene Viewer or WebXR.
+
+The remaining in-page option for true SLAM on iOS is a commercial library such
+as 8th Wall, which is not a browser API and needs a licence.
 
 ### Tuning the sensor path on a device
 

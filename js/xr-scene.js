@@ -769,9 +769,10 @@ document.addEventListener('DOMContentLoaded', () => {
       gateNote.textContent = 'Sensor tracking · this device is not ARCore-certified';
       startBtn.textContent = 'Start camera view';
       gateCopy.textContent =
-        'This device cannot run WebXR, so the reef is placed using the camera and ' +
-        'motion sensors instead. Point the phone down at the floor and tap to place it. ' +
-        'Turn on the spot to look around it \u2014 walking is not tracked without WebXR.';
+        'This device cannot run WebXR, so the in-page view places the reef with the ' +
+        'camera and motion sensors: it holds its bearing as you turn, but walking is ' +
+        'not tracked. For tracking that survives walking around the reef, open it in ' +
+        'ARKit instead.';
     }
   });
 
@@ -846,12 +847,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   scene.addEventListener('enter-vr', () => {
     if (!scene.is('ar-mode')) return;
+    // Handing off to a native viewer from inside a live XR session
+    // would be asking for a second session; hide it until we are out.
+    arkitOpen.classList.remove('is-available');
     document.body.classList.add('in-ar');
     gate.classList.add('is-hidden');
     say('Looking for a surface', 'Move your phone slowly across the floor.');
   });
 
   scene.addEventListener('exit-vr', () => {
+    if (window.ReefARKit) showARKit(window.ReefARKit);
     document.body.classList.remove('in-ar');
     gate.classList.remove('is-hidden');
     startBtn.disabled = false;
@@ -932,7 +937,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // The sensor path has no XR select event, so taps come from the DOM.
   document.getElementById('overlay').addEventListener('click', (ev) => {
     if (placed) return;
-    if (ev.target.closest('.ar-back, .ar-btn, .hud')) return;
+    if (ev.target.closest('.ar-back, .ar-btn, .ar-btn-alt, .hud')) return;
     const comp = sensor.components['sensor-ar'];
     if (comp && comp.active) comp.place();
   });
@@ -959,6 +964,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   scene.addEventListener('temperature-change', (ev) => {
     const { celsius, label } = ev.detail;
+
+    // The reef sent to ARKit should be the reef on screen.
+    if (window.ReefARKit) window.ReefARKit.setBleach(ev.detail.bleach);
+
     hudTemp.textContent   = celsius.toFixed(1) + ' \u00B0C';
     sliderVal.textContent = celsius.toFixed(1) + ' \u00B0C';
     hudState.textContent  = label.text;
@@ -999,6 +1008,53 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     hudSite.textContent = siteLabel;
   }
+
+  /* ---------- ARKit hand-off ----------
+     On iOS this is the only path to real six-degrees-of-freedom
+     tracking: Safari implements no WebXR, so the reef is handed to
+     AR Quick Look, which is ARKit in a native viewer. On Android it
+     resolves to Scene Viewer or WebXR. js/arkit.js reports whether
+     the device can take the hand-off at all. */
+
+  const arkitStart = document.getElementById('arkitStart');
+  const arkitOpen  = document.getElementById('arkitOpen');
+  const arkitNote  = document.getElementById('arkitNote');
+
+  const openARKit = () => {
+    if (window.ReefARKit && window.ReefARKit.launch()) return;
+    const why = (window.ReefARKit && window.ReefARKit.reason) ||
+                'Native AR is not available on this device.';
+    arkitNote.textContent = why;
+    arkitNote.classList.add('is-shown');
+  };
+
+  arkitStart.addEventListener('click', openARKit);
+  arkitOpen.addEventListener('click', openARKit);
+
+  const showARKit = (detail) => {
+    const ok = detail.supported;
+
+    arkitStart.classList.toggle('is-available', ok);
+    arkitOpen.classList.toggle('is-available', ok);
+
+    if (ok) {
+      /* Worth saying plainly on the device where it matters. The
+         in-page session tracks rotation only; this one does not. */
+      arkitNote.textContent = mode === 'webxr'
+        ? 'Opens the reef in the system AR viewer at real scale.'
+        : 'Opens the reef in ARKit, which tracks properly as you walk ' +
+          'around it. The temperature is fixed at whatever is set here.';
+      arkitNote.classList.add('is-shown');
+    } else if (detail.reason) {
+      arkitNote.textContent = detail.reason;
+      arkitNote.classList.add('is-shown');
+    }
+  };
+
+  document.addEventListener('arkit-status', (ev) => showARKit(ev.detail));
+
+  // arkit.js can settle before this listener exists, so read it once.
+  if (window.ReefARKit && window.ReefARKit.supported) showARKit(window.ReefARKit);
 
   /* ---------- on-device diagnostics ----------
      Add ?debug to the URL for a live readout of the sensor path, and
