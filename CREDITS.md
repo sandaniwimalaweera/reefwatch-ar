@@ -2,7 +2,7 @@
 
 All third-party assets used in ReefWatch AR are listed here, as required by the
 academic integrity section of the assignment brief. Add every asset the moment
-you download it — do not leave this until the end.
+you download it - do not leave this until the end.
 
 ## 3D Models
 
@@ -37,7 +37,7 @@ Variable: `sea_surface_temperature`
 
 ## Fonts
 
-Bricolage Grotesque, Public Sans and JetBrains Mono — served via Google Fonts,
+Bricolage Grotesque, Public Sans and JetBrains Mono - served via Google Fonts,
 all licensed under the SIL Open Font License 1.1.
 
 ## Declaration
