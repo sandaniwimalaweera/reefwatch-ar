@@ -137,8 +137,7 @@
     device-orientation-permission-ui="enabled: false">
 
     <a-assets>
-      <a-asset-item id="reefModel"  src="assets/models/reef.glb"></a-asset-item>
-      <a-asset-item id="coralModel" src="assets/models/coral.glb"></a-asset-item>
+      <a-asset-item id="reefModel" src="assets/models/reef.glb"></a-asset-item>
     </a-assets>
 
     <!-- In a WebXR session the device supplies the pose. In the sensor
@@ -198,115 +197,7 @@
         bleachable
         temperature-driven>
       </a-entity>
-
-      <!-- Satellite corals. One model, re-used: fit-model gives each
-           its own size, bleachable's tint stands in for a different
-           species, and a slow rotation sway suggests the surge moving
-           through them. Every one is temperature-driven, so the whole
-           garden bleaches together with the reef section. -->
-      <a-entity id="coralGarden">
-        <a-entity position="0.70 0 0.18" rotation="0 -34 0"
-                  contact-shadow="radius: 0.22; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.28"
-            bleachable="tint: #FFC9B0"
-            temperature-driven
-            animation="property: rotation; from: -1.10 0 0.70; to: 1.10 0 -0.70; dir: alternate; loop: true; dur: 5200; easing: easeInOutSine"></a-entity>
-        </a-entity>
-
-        <a-entity position="0.42 0 0.60" rotation="0 118 0"
-                  contact-shadow="radius: 0.17; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.20"
-            bleachable="tint: #BFF0E2"
-            temperature-driven
-            animation="property: rotation; from: -1.45 0 0.95; to: 1.45 0 -0.95; dir: alternate; loop: true; dur: 6100; easing: easeInOutSine"></a-entity>
-        </a-entity>
-
-        <a-entity position="-0.06 0 0.74" rotation="0 -72 0"
-                  contact-shadow="radius: 0.24; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.30"
-            bleachable="tint: #E7C9FF"
-            temperature-driven
-            animation="property: rotation; from: -1.80 0 1.20; to: 1.80 0 -1.20; dir: alternate; loop: true; dur: 4700; easing: easeInOutSine"></a-entity>
-        </a-entity>
-
-        <a-entity position="-0.58 0 0.48" rotation="0 26 0"
-                  contact-shadow="radius: 0.15; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.18"
-            bleachable="tint: #FFEFC2"
-            temperature-driven
-            animation="property: rotation; from: -1.10 0 1.45; to: 1.10 0 -1.45; dir: alternate; loop: true; dur: 6600; easing: easeInOutSine"></a-entity>
-        </a-entity>
-
-        <a-entity position="-0.80 0 -0.06" rotation="0 155 0"
-                  contact-shadow="radius: 0.21; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.26"
-            bleachable="tint: #FFFFFF"
-            temperature-driven
-            animation="property: rotation; from: -1.45 0 0.70; to: 1.45 0 -0.70; dir: alternate; loop: true; dur: 5000; easing: easeInOutSine"></a-entity>
-        </a-entity>
-
-        <a-entity position="-0.46 0 -0.56" rotation="0 -18 0"
-                  contact-shadow="radius: 0.18; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.22"
-            bleachable="tint: #FFC7D6"
-            temperature-driven
-            animation="property: rotation; from: -1.80 0 0.95; to: 1.80 0 -0.95; dir: alternate; loop: true; dur: 5800; easing: easeInOutSine"></a-entity>
-        </a-entity>
-
-        <a-entity position="0.10 0 -0.76" rotation="0 64 0"
-                  contact-shadow="radius: 0.24; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.30"
-            bleachable="tint: #D9E9FF"
-            temperature-driven
-            animation="property: rotation; from: -1.10 0 1.20; to: 1.10 0 -1.20; dir: alternate; loop: true; dur: 4500; easing: easeInOutSine"></a-entity>
-        </a-entity>
-
-        <a-entity position="0.64 0 -0.44" rotation="0 -128 0"
-                  contact-shadow="radius: 0.14; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.17"
-            bleachable="tint: #FFC9B0"
-            temperature-driven
-            animation="property: rotation; from: -1.45 0 1.45; to: 1.45 0 -1.45; dir: alternate; loop: true; dur: 6900; easing: easeInOutSine"></a-entity>
-        </a-entity>
-
-        <a-entity position="0.74 0 0.44" rotation="0 92 0"
-                  contact-shadow="radius: 0.12; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.14"
-            bleachable="tint: #BFF0E2"
-            temperature-driven
-            animation="property: rotation; from: -1.80 0 0.70; to: 1.80 0 -0.70; dir: alternate; loop: true; dur: 7300; easing: easeInOutSine"></a-entity>
-        </a-entity>
-
-        <a-entity position="-0.20 0 0.80" rotation="0 -55 0"
-                  contact-shadow="radius: 0.13; opacity: 0.34">
-          <a-entity
-            gltf-model="#coralModel"
-            fit-model="size: 0.15"
-            bleachable="tint: #FFEFC2"
-            temperature-driven
-            animation="property: rotation; from: -1.10 0 0.95; to: 1.10 0 -0.95; dir: alternate; loop: true; dur: 6300; easing: easeInOutSine"></a-entity>
-        </a-entity>
-      </a-entity>
-
-      <a-entity reef-school="count: 16; radius: 1.05; coral: 0.45; minHeight: 0.12; maxHeight: 0.85; length: 0.14; speed: 0.34; perception: 0.40; personal: 0.14"></a-entity>
+      <a-entity reef-school="count: 12; radius: 1.05; coral: 0.45; minHeight: 0.12; maxHeight: 0.85; length: 0.14; speed: 0.34; perception: 0.40; personal: 0.14"></a-entity>
       <a-entity marine-snow="count: 70; spread: 1.8; top: 1.4"></a-entity>
       <a-entity caustic-light="intensity: 0.9"></a-entity>
     </a-entity>
