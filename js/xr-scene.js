@@ -100,6 +100,7 @@ AFRAME.registerComponent('temperature-driven', {
        → requestHitTestSource
        → per-frame getHitTestResults
        → pose in the local reference space
+       → createAnchor on placement
    ------------------------------------------------------------ */
 AFRAME.registerComponent('hit-test-placer', {
   schema: {
@@ -111,6 +112,8 @@ AFRAME.registerComponent('hit-test-placer', {
     this.source = null;
     this.hasHit = false;
     this.placed = false;
+    this.anchor = null;
+    this.lastHit = null;
     this.matrix = new THREE.Matrix4();
     this.pos = new THREE.Vector3();
     this.quat = new THREE.Quaternion();
@@ -143,11 +146,12 @@ AFRAME.registerComponent('hit-test-placer', {
         this.source = null;
         this.hasHit = false;
         this.placed = false;
+        this.anchor = null;
       });
     });
   },
 
-    tick: function () {
+  tick: function () {
     const sceneEl = this.el.sceneEl;
     const frame = sceneEl.frame;
     if (!frame || !this.source) return;
@@ -180,7 +184,8 @@ AFRAME.registerComponent('hit-test-placer', {
       return;
     }
 
-        this.lastHit = results[0];
+    // Kept so that place() can turn this exact hit into an anchor.
+    this.lastHit = results[0];
 
     const pose = results[0].getPose(refSpace);
     if (!pose) return;
@@ -200,7 +205,7 @@ AFRAME.registerComponent('hit-test-placer', {
     }
   },
 
-    place: function () {
+  place: function () {
     if (!this.hasHit || !this.data.target) return;
 
     this.data.target.object3D.position.copy(this.pos);
@@ -213,14 +218,23 @@ AFRAME.registerComponent('hit-test-placer', {
        same physical point later — the reef appears to slide.
 
        An anchor hands that problem to the platform: it tracks the
-       physical point and reports a corrected pose every frame. */
+       physical point and reports a corrected pose every frame.
+
+       `anchors` is requested as an optional feature, so it may be
+       absent. The status is reported rather than failing silently,
+       because a missing anchor and a drifting anchor look identical
+       on screen. */
     if (this.lastHit && this.lastHit.createAnchor) {
       this.lastHit.createAnchor().then((anchor) => {
         this.anchor = anchor;
+        this.el.emit('anchor-status', { state: 'anchored' });
       }).catch(() => {
-        /* Anchors are optional. Without them the static pose above
-           still holds; it just drifts more on long sessions. */
+        // Without an anchor the static pose above still holds; it
+        // just drifts more as the session goes on.
+        this.el.emit('anchor-status', { state: 'anchor failed' });
       });
+    } else {
+      this.el.emit('anchor-status', { state: 'anchors unsupported' });
     }
 
     if (!this.placed) {
@@ -230,7 +244,7 @@ AFRAME.registerComponent('hit-test-placer', {
     }
   },
 
-    rearm: function () {
+  rearm: function () {
     this.placed = false;
     if (this.anchor && this.anchor.delete) this.anchor.delete();
     this.anchor = null;
@@ -241,11 +255,11 @@ AFRAME.registerComponent('hit-test-placer', {
 /* ------------------------------------------------------------
    sensor-ar
 
-   Markerless tracking for devices that cannot run WebXR. ARCore
-   certification is hardware-locked, so a large share of Android
-   phones — and every iPhone — cannot open an immersive-ar
-   session at all. Without a second path, half this project
-   would be undemonstrable on the devices actually to hand.
+   Markerless tracking for devices that cannot run WebXR. Every
+   iPhone falls here, because iOS Safari does not implement
+   immersive-ar at all, as do Android devices that are not
+   ARCore-certified. Without a second path, half this project
+   would be undemonstrable on a large share of target hardware.
 
    The brief permits "the WebXR Device API or supported browser
    equivalents". This is that equivalent:
@@ -277,6 +291,7 @@ AFRAME.registerComponent('sensor-ar', {
     this.camPos = new THREE.Vector3();
     this.point = new THREE.Vector3();
     this.forward = new THREE.Vector3(0, 0, -1);
+    this.camQuat = new THREE.Quaternion();
   },
 
   start: function () {
@@ -329,7 +344,8 @@ AFRAME.registerComponent('sensor-ar', {
     if (!cam) return;
 
     cam.getWorldPosition(this.camPos);
-    this.dir.copy(this.forward).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()));
+    cam.getWorldQuaternion(this.camQuat);
+    this.dir.copy(this.forward).applyQuaternion(this.camQuat);
 
     // Only meaningful when the phone is tilted downward; otherwise
     // the ray never meets the ground plane.
@@ -388,7 +404,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const scene     = document.querySelector('a-scene');
   const placer    = document.getElementById('placer');
   const sensor    = document.getElementById('sensor');
-  const reticle   = document.getElementById('reticle');
   const reef      = document.getElementById('reef');
   const gate      = document.getElementById('gate');
   const gateTitle = document.getElementById('gateTitle');
@@ -406,6 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let placed = false;
   let mode = null;          // 'webxr' | 'sensor'
+  let siteLabel = 'Manual control';
 
   /* ---------- messaging helpers ---------- */
 
@@ -442,8 +458,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ---------- capability detection ----------
      WebXR is preferred because it gives true six-degrees-of-
-     freedom tracking. The sensor path is the fallback for the
-     many devices that are not ARCore-certified. */
+     freedom tracking. The sensor path is the fallback for iOS
+     and for Android devices that are not ARCore-certified. */
 
   const chooseMode = () => {
     if (!navigator.xr || !navigator.xr.isSessionSupported) {
@@ -487,7 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // session first purely to read the real failure reason.
     navigator.xr.requestSession('immersive-ar', {
       requiredFeatures: ['hit-test'],
-      optionalFeatures: ['dom-overlay', 'local-floor'],
+      optionalFeatures: ['dom-overlay', 'local-floor', 'anchors'],
       domOverlay: { root: document.getElementById('overlay') }
     }).then((probe) => probe.end()).then(() => {
       let entered = false;
@@ -502,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         if (!entered) gateFailed('The session was granted but AR mode did not start. Try reloading.');
       }, 5000);
-    }).catch((err) => {
+    }).catch(() => {
       // Fall back rather than dead-ending the user.
       mode = 'sensor';
       startSensor();
@@ -521,7 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // iOS 13+ gates DeviceOrientation behind an explicit request that
   // must originate from a user gesture.
-   function requestMotionPermission () {
+  function requestMotionPermission () {
     const DOE = window.DeviceOrientationEvent;
     if (!DOE || typeof DOE.requestPermission !== 'function') {
       enableMagicWindow();
@@ -590,6 +606,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   placer.addEventListener('hit-test-failed', (ev) =>
     say('Hit-testing unavailable', (ev.detail && ev.detail.message) || 'No hit-test source.'));
+
+  // Anchoring is invisible when it works and invisible when it does
+  // not, so report it in the HUD alongside the data source.
+  placer.addEventListener('anchor-status', (ev) => {
+    hudSite.textContent = siteLabel + ' \u00B7 ' + ev.detail.state;
+  });
 
   sensor.addEventListener('ground-found', () => {
     if (placed) return;
@@ -662,16 +684,17 @@ document.addEventListener('DOMContentLoaded', () => {
       else if (reading.cached)  source = 'cached';
       else                      source = 'seasonal average';
 
-      hudSite.textContent = reading.site + ' \u00B7 ' + source;
+      siteLabel = reading.site + ' \u00B7 ' + source;
+      hudSite.textContent = siteLabel;
       hudSite.classList.toggle('is-stale', reading.offline);
 
       slider.value = reading.celsius;
       setTemp(reading.celsius);
     }).catch(() => {
-      hudSite.textContent = 'Manual control';
+      hudSite.textContent = siteLabel;
     });
   } else {
-    hudSite.textContent = 'Manual control';
+    hudSite.textContent = siteLabel;
   }
 
   // Publish an initial state so the HUD is never blank.
