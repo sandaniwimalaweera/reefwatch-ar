@@ -78,6 +78,61 @@ gate copy and in the HUD, which reads `rotation only` on this path against
 
 ---
 
+## Challenge 2: The reef still drifted on iPhone after the camera was fixed
+
+**Date:** 2026-09-02
+
+**Symptom:** With the camera turning correctly, the reef held still for a few
+seconds and then wandered. Turning away from it and turning back left it
+several degrees around the room from where it had been dropped. The error grew
+with how much the phone was moved, not with how long the session had run.
+
+**Cause:** iOS Safari's `alpha` is not a heading. Android reports a
+north-referenced alpha and announces it through `deviceorientationabsolute`;
+Safari reports an arbitrary reference taken when the listener was attached, and
+it drifts in proportion to how much the device is moved. Every frame the camera
+was being pointed with a yaw that no longer meant what it had meant when the
+reef was placed, so the reef appeared to slide even though nothing had written
+to its transform since placement.
+
+**What I tried that failed:** Treating it as a smoothing problem and easing the
+camera rotation. It hid nothing — the drift is in the measurement, not the
+noise, so filtering it just delayed the same error.
+
+**Solution:** A complementary filter over the two sensors. The gyro's `alpha`
+still supplies frame-to-frame motion because it is smooth, and Safari's
+`webkitCompassHeading` — magnetometer-referenced, absolute, and drift-free but
+noisy — supplies the truth. `sensor-ar.correctYaw` holds an offset between them
+and moves it toward the compass at a gain of 0.02 per event, roughly a second
+to absorb a correction: far slower than the magnetometer's jitter, far faster
+than the drift being undone. Readings are ignored when
+`webkitCompassAccuracy` is negative or above 25°, which is Safari's way of
+saying the magnetometer is uncalibrated or disturbed.
+
+`webkitCompassHeading` runs clockwise from north and `alpha` runs
+anticlockwise, hence the `360 - heading` in the conversion.
+
+**Result:** The reef holds its bearing across a session. Two smaller faults
+found in the same pass:
+
+- The camera feed was sized `100vw`/`100vh` while the canvas over it was a
+  `position: fixed; inset: 0` box. On iOS Safari those resolve against
+  different viewports — the large one ignores the toolbar, the visual one does
+  not — so the feed was scaled differently from the render by the height of
+  the toolbar. Both are percentages now, and the field of view is computed
+  from `canvas.clientWidth/Height` rather than `window.inner*`.
+- Rotating the virtual camera about a fixed point is not what a person does
+  with a phone held out in front of them. `armLength` sweeps the camera
+  through the same arc the real lens travels. It is off by default, since it
+  is a guess about how the phone is being held, and tunable with `?arm=0.3`.
+
+Add `?debug` to the markerless URL for a live readout of event type, raw
+angles, compass heading and accuracy, the offset, feed and canvas dimensions,
+the computed field of view and the reef's world position. `?fov=NN` overrides
+the assumed lens angle without editing the page.
+
+---
+
 # Asset optimisation record
 
 Fill this in on day 2. These numbers are direct evidence for the

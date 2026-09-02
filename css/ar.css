@@ -601,10 +601,37 @@ html, body {
 .sensor-feed {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
+  /* Not 100vw/100vh. On iOS Safari those resolve against the large
+     viewport, which ignores the toolbar, while the canvas above is a
+     fixed inset:0 box resolving against the visual viewport. The two
+     then differ by the height of the toolbar, the feed is scaled
+     differently from the render, and the reef slides across the floor
+     as the phone turns. Percentages keep both boxes identical. */
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   z-index: 0;
+}
+
+/* On-device readout for the sensor path, enabled with ?debug in the
+   URL. Sensor bugs are invisible in a desktop browser, so the numbers
+   have to be legible on the phone itself. */
+.sensor-debug {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  max-width: 60vw;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  line-height: 1.5;
+  white-space: pre;
+  color: #9BFFE4;
+  background: rgba(2, 16, 24, 0.82);
+  border-bottom-right-radius: 0.5rem;
+  pointer-events: none;
 }
 
 .xr-page.in-sensor-ar,

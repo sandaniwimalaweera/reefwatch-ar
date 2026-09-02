@@ -297,7 +297,27 @@ AFRAME.registerComponent('sensor-ar', {
        overlay slide across the room: if the virtual camera is wider
        than the real one, the reef sweeps faster than the floor
        underneath it. 65° is typical of a phone's main rear lens. */
-    cameraFov: { type: 'number', default: 65 }
+    cameraFov: { type: 'number', default: 65 },
+
+    /* Correct the gyro's yaw against the magnetometer. Only iOS
+       reports a compass heading on the orientation event; on Android
+       `deviceorientationabsolute` is already north-referenced and
+       this does nothing. */
+    compass:     { type: 'boolean', default: true },
+    compassGain: { type: 'number',  default: 0.02 },
+
+    /* Distance in metres from the point the user pivots about to the
+       phone's lens. Rotating the camera about a fixed point is not
+       what a person does: the phone is held out in front, so turning
+       on the spot swings the lens through an arc, and an object two
+       metres away appears to shift by roughly arm / distance radians.
+       Sweeping the virtual camera through the same arc removes that.
+
+       Off by default because it is a guess about how the phone is
+       being held, and a wrong guess trades one error for another.
+       Try `?arm=0.3` on the device and keep it if the reef sits
+       tighter to the floor while panning. */
+    armLength: { type: 'number', default: 0 }
   },
 
   init: function () {
@@ -311,11 +331,24 @@ AFRAME.registerComponent('sensor-ar', {
     this.camPos  = new THREE.Vector3();
     this.point   = new THREE.Vector3();
     this.forward = new THREE.Vector3(0, 0, -1);
+    this.up      = new THREE.Vector3(0, 1, 0);
+    this.arm     = new THREE.Vector3();
+    this.yawEuler = new THREE.Euler();
+    this.yawQuat  = new THREE.Quaternion();
 
     this.orientation = new THREE.Quaternion();
     this.euler   = new THREE.Euler();
     this.screenQ = new THREE.Quaternion();
     this.zAxis   = new THREE.Vector3(0, 0, 1);
+
+    /* Yaw correction. See onOrientation. */
+    this.alphaOffset = null;
+    this.heading = null;
+    this.headingAccuracy = null;
+
+    // Last raw reading, kept only so the debug panel can show it.
+    this.raw = { alpha: 0, beta: 0, gamma: 0, screen: 0 };
+    this.fov = 0;
 
     /* DeviceOrientation describes the screen's frame. The camera
        looks out of the back of the phone, which is that frame
@@ -424,8 +457,16 @@ AFRAME.registerComponent('sensor-ar', {
 
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    const w  = window.innerWidth;
-    const h  = window.innerHeight;
+
+    /* Measure the canvas rather than the window. On iOS Safari a
+       `100vh` element is sized against the large viewport, which
+       ignores the toolbar, while a `position: fixed; inset: 0`
+       element is sized against the visual viewport, which does not.
+       Reading the canvas keeps the projection matched to the box the
+       feed is actually drawn in. */
+    const canvas = this.el.sceneEl.canvas;
+    const w = (canvas && canvas.clientWidth)  || window.innerWidth;
+    const h = (canvas && canvas.clientHeight) || window.innerHeight;
 
     const longSide  = Math.max(vw, vh);
     const shortSide = Math.min(vw, vh);
@@ -438,10 +479,35 @@ AFRAME.registerComponent('sensor-ar', {
     const scale   = Math.max(w / vw, h / vh);
     const visible = Math.min(1, (h / scale) / vh);
 
-    const fovV = 2 * Math.atan(Math.tan(fovFullV / 2) * visible);
-    camEl.setAttribute('camera', 'fov', THREE.MathUtils.radToDeg(fovV));
+    this.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(fovFullV / 2) * visible));
+    camEl.setAttribute('camera', 'fov', this.fov);
   },
 
+  /* ----------------------------------------------------------
+     Orientation, and the yaw drift that breaks anchoring on iOS.
+
+     `alpha` is supposed to be the heading. On Android it is, and
+     `deviceorientationabsolute` says so. On iOS it is not: Safari
+     reports an arbitrary reference taken when listening started,
+     and it drifts — not steadily with time, but in proportion to
+     how much the phone is moved. That is exactly the symptom of a
+     reef that will not stay put: turn away, walk about, turn back,
+     and the reef has slid several degrees around the room because
+     the yaw the camera is using no longer means what it did when
+     the reef was placed.
+
+     Safari does expose a magnetometer heading, `webkitCompassHeading`,
+     which is absolute and does not drift, but it is noisy — feeding
+     it straight into the yaw makes the whole scene shake.
+
+     So: keep the gyro's alpha for frame-to-frame smoothness, and
+     hold a slowly-adjusted offset that pulls it back onto the
+     compass. The gyro supplies the detail, the compass supplies
+     the truth, and the reef stays on its bearing.
+
+     `webkitCompassHeading` runs clockwise from north; `alpha` runs
+     anticlockwise, hence the subtraction from 360.
+     ---------------------------------------------------------- */
   onOrientation: function (ev) {
     if (ev.alpha === null || ev.alpha === undefined) return;
 
@@ -450,21 +516,29 @@ AFRAME.registerComponent('sensor-ar', {
     if (this.eventName === null) this.eventName = ev.type;
     if (ev.type !== this.eventName) return;
 
-    const alpha = THREE.MathUtils.degToRad(ev.alpha);
-    const beta  = THREE.MathUtils.degToRad(ev.beta  || 0);
-    const gamma = THREE.MathUtils.degToRad(ev.gamma || 0);
+    this.raw.alpha = ev.alpha;
+    this.raw.beta  = ev.beta  || 0;
+    this.raw.gamma = ev.gamma || 0;
+
+    if (this.data.compass) this.correctYaw(ev);
+
+    const alpha = THREE.MathUtils.degToRad(ev.alpha + (this.alphaOffset || 0));
+    const beta  = THREE.MathUtils.degToRad(this.raw.beta);
+    const gamma = THREE.MathUtils.degToRad(this.raw.gamma);
 
     let angle = 0;
     if (screen.orientation && typeof screen.orientation.angle === 'number') {
-      angle = THREE.MathUtils.degToRad(screen.orientation.angle);
+      angle = screen.orientation.angle;
     } else if (typeof window.orientation === 'number') {
-      angle = THREE.MathUtils.degToRad(window.orientation);
+      angle = window.orientation;
     }
+    this.raw.screen = angle;
 
     this.euler.set(beta, alpha, -gamma, 'YXZ');
     this.orientation.setFromEuler(this.euler);
     this.orientation.multiply(this.deviceToCamera);
-    this.orientation.multiply(this.screenQ.setFromAxisAngle(this.zAxis, -angle));
+    this.orientation.multiply(
+      this.screenQ.setFromAxisAngle(this.zAxis, -THREE.MathUtils.degToRad(angle)));
 
     if (!this.tracking) {
       this.tracking = true;
@@ -473,12 +547,41 @@ AFRAME.registerComponent('sensor-ar', {
     }
   },
 
+  correctYaw: function (ev) {
+    const heading = ev.webkitCompassHeading;
+    if (typeof heading !== 'number' || isNaN(heading)) return;
+
+    /* Safari reports accuracy in degrees, and -1 when the
+       magnetometer is not calibrated or is being disturbed — by a
+       magnet, a laptop, or reinforced concrete. Correcting from a
+       bad heading would drag the scene around, which is worse than
+       the drift it is meant to remove. */
+    const accuracy = ev.webkitCompassAccuracy;
+    this.heading = heading;
+    this.headingAccuracy = accuracy;
+    if (typeof accuracy === 'number' && (accuracy < 0 || accuracy > 25)) return;
+
+    const wanted = 360 - heading - ev.alpha;
+
+    if (this.alphaOffset === null) {
+      this.alphaOffset = wanted;          // first fix: adopt it outright
+      return;
+    }
+
+    // Shortest way round, applied gently: about a second to absorb a
+    // correction, which is far slower than the magnetometer's jitter
+    // and far faster than the drift it is undoing.
+    const delta = (((wanted - this.alphaOffset) % 360) + 540) % 360 - 180;
+    this.alphaOffset += delta * this.data.compassGain;
+  },
+
   stop: function () {
     this.active = false;
     this.placed = false;
     this.hasGround = false;
     this.tracking = false;
     this.eventName = null;
+    this.alphaOffset = null;
     clearTimeout(this.watchdog);
 
     window.removeEventListener('deviceorientationabsolute', this.onOrientation);
@@ -514,7 +617,18 @@ AFRAME.registerComponent('sensor-ar', {
        which is what makes the reef look placed on the floor rather
        than painted on the screen. */
     if (this.tracking) camEl.object3D.quaternion.copy(this.orientation);
-    camEl.object3D.position.set(0, this.data.eyeHeight, 0);
+
+    /* Yaw only. Panning swings the phone through an arc; tilting it
+       down with the wrist barely moves the lens at all, so feeding
+       pitch into the arm would invent motion that did not happen. */
+    if (this.data.armLength > 0 && this.tracking) {
+      this.yawEuler.setFromQuaternion(this.orientation, 'YXZ');
+      this.yawQuat.setFromAxisAngle(this.up, this.yawEuler.y);
+      this.arm.set(0, 0, -this.data.armLength).applyQuaternion(this.yawQuat);
+      camEl.object3D.position.set(this.arm.x, this.data.eyeHeight, this.arm.z);
+    } else {
+      camEl.object3D.position.set(0, this.data.eyeHeight, 0);
+    }
 
     if (this.placed) return;
 
@@ -875,6 +989,66 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   } else {
     hudSite.textContent = siteLabel;
+  }
+
+  /* ---------- on-device diagnostics ----------
+     Add ?debug to the URL for a live readout of the sensor path, and
+     ?fov=NN to override the assumed camera field of view without
+     editing the page — the two things that cannot be checked from a
+     desktop browser and decide whether the reef holds its place. */
+
+  const params = new URLSearchParams(location.search);
+
+  if (params.has('fov')) {
+    const f = parseFloat(params.get('fov'));
+    if (f > 20 && f < 130) sensor.setAttribute('sensor-ar', 'cameraFov', f);
+  }
+  if (params.get('compass') === 'off') {
+    sensor.setAttribute('sensor-ar', 'compass', false);
+  }
+  if (params.has('arm')) {
+    const a = parseFloat(params.get('arm'));
+    if (a >= 0 && a < 1.5) sensor.setAttribute('sensor-ar', 'armLength', a);
+  }
+
+  if (params.has('debug')) {
+    const panel = document.createElement('pre');
+    panel.className = 'sensor-debug';
+    document.getElementById('overlay').appendChild(panel);
+
+    const deg = (r) => (THREE.MathUtils.radToDeg(r)).toFixed(1);
+    const num = (v, d) => (v === null || v === undefined ? '--' : v.toFixed(d === undefined ? 1 : d));
+
+    setInterval(() => {
+      const c = sensor.components['sensor-ar'];
+      const camEl = scene.camera && scene.camera.el;
+      const canvas = scene.canvas;
+      const rows = [];
+
+      rows.push('mode      ' + mode);
+
+      if (!c || !c.active) {
+        rows.push('sensor    idle');
+      } else {
+        const e = new THREE.Euler().setFromQuaternion(camEl.object3D.quaternion, 'YXZ');
+        rows.push('event     ' + (c.eventName || 'none') + (c.tracking ? '' : ' (no data)'));
+        rows.push('abg       ' + num(c.raw.alpha) + ' ' + num(c.raw.beta) + ' ' + num(c.raw.gamma));
+        rows.push('screen    ' + c.raw.screen + '°');
+        rows.push('compass   ' + num(c.heading) + '° acc ' + num(c.headingAccuracy));
+        rows.push('offset    ' + num(c.alphaOffset));
+        rows.push('cam yaw   ' + deg(e.y) + '°  pitch ' + deg(e.x) + '°');
+        rows.push('feed      ' + (c.video ? c.video.videoWidth + 'x' + c.video.videoHeight : '--'));
+        rows.push('canvas    ' + (canvas ? canvas.clientWidth + 'x' + canvas.clientHeight : '--'));
+        rows.push('fov       ' + num(c.fov, 2) + '° (assume ' + c.data.cameraFov + ')');
+        rows.push('arm       ' + c.data.armLength + ' m');
+        rows.push('placed    ' + (c.placed ? 'yes' : 'no'));
+      }
+
+      const p = reef.object3D.position;
+      rows.push('reef      ' + p.x.toFixed(2) + ' ' + p.y.toFixed(2) + ' ' + p.z.toFixed(2));
+
+      panel.textContent = rows.join('\n');
+    }, 120);
   }
 
   // Publish an initial state so the HUD is never blank.
