@@ -49,9 +49,13 @@ AFRAME.registerComponent('fit-model', {
     const obj = this.el.object3D;
 
     // Measure at neutral transform, otherwise each fit compounds
-    // the last one.
+    // the last one. Rotation is parked too: an entity that is being
+    // animated while it loads would otherwise be measured tilted,
+    // and sit slightly off the surface for it.
+    const spin = obj.quaternion.clone();
     obj.scale.set(1, 1, 1);
     obj.position.set(0, 0, 0);
+    obj.quaternion.identity();
     obj.updateMatrixWorld(true);
 
     // setFromObject returns world space. Convert into this entity's
@@ -59,6 +63,7 @@ AFRAME.registerComponent('fit-model', {
     const box = new THREE.Box3().setFromObject(mesh);
     const toLocal = new THREE.Matrix4().copy(obj.matrixWorld).invert();
     box.applyMatrix4(toLocal);
+    obj.quaternion.copy(spin);
 
     const span = new THREE.Vector3();
     box.getSize(span);
@@ -94,12 +99,17 @@ AFRAME.registerComponent('fit-model', {
    ------------------------------------------------------------ */
 AFRAME.registerComponent('bleachable', {
   schema: {
-    amount: { type: 'number', default: 0 }
+    amount: { type: 'number', default: 0 },
+    // Multiplied into the model's own colours as it loads, so one
+    // coral export can stand in for several species. Bleaching
+    // still runs from whatever base colour that leaves.
+    tint:   { type: 'color',  default: '#FFFFFF' }
   },
 
   init: function () {
     this.materials = [];
     this.bone = new THREE.Color('#FFF6EC');
+    this.tint = new THREE.Color(this.data.tint);
 
     this.el.addEventListener('model-loaded', () => {
       const root = this.el.getObject3D('mesh');
@@ -115,7 +125,7 @@ AFRAME.registerComponent('bleachable', {
           const c = mat.clone();
           this.materials.push({
             mat: c,
-            base: c.color ? c.color.clone() : new THREE.Color('#ffffff'),
+            base: (c.color ? c.color.clone() : new THREE.Color('#ffffff')).multiply(this.tint),
             baseRough: c.roughness !== undefined ? c.roughness : 0.6,
             baseMetal: c.metalness !== undefined ? c.metalness : 0.0
           });
