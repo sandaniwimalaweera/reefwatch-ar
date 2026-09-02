@@ -191,6 +191,83 @@ that cannot run WebXR at all.
 
 ---
 
+## Challenge 4: A 22 MB fish school on a 2 MB budget
+
+**Date:** 2026-09-02
+
+**Symptom:** The procedural boids school reads as fish but not as *reef* fish —
+they are lathed profiles with cone fins. The obvious fix was a modelled school,
+and LasquetiSpice's "Animated Swimming Tropical Fish School Loop" (CC BY 4.0,
+8,932 triangles) is the right one. As downloaded it is **22 MB**: a 6.2 MB
+binary and 15.4 MB of PNGs, against a stated budget of 2 MB for the whole app.
+
+It also would not have loaded. `KHR_materials_pbrSpecularGlossiness` is in its
+`extensionsRequired`, and three.js removed that extension in r160 — so it would
+have failed outright in `<model-viewer>`, taking the ARKit hand-off with it.
+
+**Cause:** Sketchfab's auto-converted glTF is an archival export, not a delivery
+format. Measuring where the bytes were, rather than guessing, was the whole job:
+
+| | Size | |
+|---|---|---|
+| Animation | 4.17 MB | 228 channels baked at 30 fps over 41 s |
+| Textures | 15.35 MB | 18 PNGs, normals at 2048², everything else 1024² |
+| Geometry | 1.98 MB | fully de-indexed: 26,796 vertices for 8,932 triangles |
+
+**What I tried that failed:** Running `weld` to re-index the geometry did almost
+nothing — it merges *bitwise identical* vertices, and every vertex carried a
+per-face `TANGENT`, so no two ever matched. Welding only worked once the
+tangents were gone, and the tangents were only there to serve normal maps.
+
+**Solution:** A measured pipeline, in this order, because the order matters:
+
+1. `metalrough` — spec-gloss to metallic-roughness. Not optional: without it the
+   file is unloadable in current three.js.
+2. Strip `TANGENT` and the normal, occlusion and emissive maps. On a fish about
+   10 cm long in an AR scene these are invisible, and they were costing a third
+   of the geometry and most of the texture budget. `emissiveFactor` is deleted
+   with the texture — left behind at `[1,1,1]` it would make every fish glow.
+3. `prune`, then `weld` — now unblocked: **26,796 vertices to 6,123**, with all
+   8,932 triangles intact.
+4. `resample --tolerance 0.002` on the animation.
+5. `resize 512` and `webp` on what textures remain.
+6. `quantize` for mesh attributes.
+
+| Stage | Size |
+|---|---|
+| Raw, bundled to GLB | 22.0 MB |
+| after material conversion + stripping | 14.4 MB |
+| after weld | 13.2 MB |
+| after animation resample | 10.1 MB |
+| after 512 px textures | 4.4 MB |
+| after WebP | 1.77 MB |
+| after quantization | **1.56 MB** |
+
+Final composition: animation 1,045 KB, geometry 220 KB, textures 167 KB, skin
+37 KB. The animation is now the file, which is honest — it is 148 joints of
+choreography over 41 seconds and that is what was worth keeping. The Khronos
+validator reports no errors; the four `NODE_SKINNED_MESH_NON_ROOT` warnings are
+standard for Sketchfab exports and harmless here, because the joints sit under
+the same root the scene scales, so the whole rig scales together.
+
+**Result:** 93% smaller with no triangles lost. Two design decisions followed
+from what the file turned out to be:
+
+- It is **one baked school**, not individual fish — 148 joints in a single
+  skeleton driving one 41-second clip. So it cannot be steered by the existing
+  boids. Cloning it per fish to try would be over 100k triangles for twelve
+  fish, which a phone already compositing an AR passthrough will not carry. The
+  modelled fish therefore fade and leave as the reef bleaches rather than
+  scattering. `reef-school` keeps the scattering behaviour.
+- `reef-school` is **kept as the fallback**, and the model is loaded by URL
+  rather than through `<a-assets>`. An asset item pointing at a missing file
+  blocks the scene until the loader times out; a URL that 404s emits
+  `model-error`, the procedural school stays on screen, and the failure is
+  invisible to the user. It also means the scene draws instantly and upgrades
+  itself when 1.5 MB has arrived, instead of showing nothing on 4G.
+
+---
+
 # Asset optimisation record
 
 Fill this in on day 2. These numbers are direct evidence for the
@@ -200,6 +277,7 @@ Fill this in on day 2. These numbers are direct evidence for the
 |---|---|---|---|---|---|
 | coral.glb | 87 KB (unpacked glTF + bin + textures) | — | 225 KB | — | GLB bundling + Draco compression |
 | reef.glb | (check raw folder size) | — | 433 KB | — | GLB bundling + Draco compression |
+| fish-school.glb | 22.0 MB (glTF + bin + 18 PNGs) | 8,932 | 1.56 MB | 8,932 | see the pipeline below — 93% smaller, no triangles lost |
 
 Note: both GLB files are larger than the raw `.bin` mesh data because the GLB
 bundles mesh, materials and textures into a single binary. This trades a small

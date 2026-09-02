@@ -71,10 +71,17 @@
 
       <h3>3D models</h3>
       <p>Coral and reef models by rkuhlf, via Sketchfab, CC&nbsp;BY&nbsp;4.0.</p>
+      <p>
+        This work is based on
+        <a href="https://sketchfab.com/3d-models/animated-swimming-tropical-fish-school-loop-62ccf83b35c744d7b5ffb7be80d4ea99" target="_blank" rel="noopener">"Animated Swimming Tropical Fish School Loop"</a>
+        by <a href="https://sketchfab.com/LasquetiSpice" target="_blank" rel="noopener">LasquetiSpice</a>,
+        licensed under <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC-BY-4.0</a>.
+        Optimised for web delivery; geometry and animation unaltered.
+      </p>
 
       <h3>Libraries</h3>
-      <p>A-Frame and MindAR, both MIT licensed. Fish, particles and the
-         ambience are generated procedurally in code.</p>
+      <p>A-Frame and MindAR, both MIT licensed. Particles, the fallback
+         fish and the ambience are generated procedurally in code.</p>
 
       <h3>Built for</h3>
       <p>INTE 42312 - Virtual and Augmented Reality.</p>
@@ -128,8 +135,17 @@
           class="clickable">
         </a-entity>
 
-                <!-- School. Boids flocking - no path is authored. -->
-        <a-entity reef-school="count: 14; radius: 0.42; coral: 0.22"></a-entity>
+        <!-- School. Boids flocking - no path is authored. Stands in
+             until the modelled school below has downloaded, and stays
+             if it never does. -->
+        <a-entity id="boidSchool" reef-school="count: 14; radius: 0.42; coral: 0.22"></a-entity>
+
+        <!-- Modelled school, CC BY LasquetiSpice. Smaller volume than
+             the markerless scene: this one sits on a printed card. -->
+        <a-entity
+          school-model="src: assets/models/fish-school.glb;
+                        size: 0.72; lift: 0.06; spin: 0.02;
+                        replaces: #boidSchool"></a-entity>
         <!-- Drifting particulate -->
         <a-entity marine-snow="count: 70; spread: 0.7; top: 0.5"></a-entity>
 
@@ -140,6 +156,7 @@
   <script src="js/ambience.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/lib-reef.js"></script>
+  <script src="js/school-model.js"></script>
   <script src="js/marker-scene.js"></script>
 </body>
 </html>
