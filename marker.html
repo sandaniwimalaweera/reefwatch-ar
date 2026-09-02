@@ -106,7 +106,13 @@
 
         <!-- Light rig -->
         <a-entity light="type: ambient; color: #9FD8EA; intensity: 0.7"></a-entity>
-        <a-entity light="type: directional; color: #FFFFFF; intensity: 0.85" position="0.6 1.4 0.8"></a-entity>
+        <a-entity light="type: directional; color: #FFFFFF; intensity: 0.85;
+                 castShadow: true; shadowMapWidth: 512; shadowMapHeight: 512;
+                 shadowCameraLeft: -0.7; shadowCameraRight: 0.7;
+                 shadowCameraTop: 0.7; shadowCameraBottom: -0.7;
+                 shadowCameraNear: 0.1; shadowCameraFar: 4;
+                 shadowBias: -0.001"
+          position="0.6 1.4 0.8"></a-entity>
         <a-entity light="type: directional; color: #5FC6F0; intensity: 0.4" position="-0.8 0.2 -0.6"></a-entity>
         <a-entity caustic-light></a-entity>
 
@@ -115,8 +121,9 @@
         <a-entity
           id="coral"
           gltf-model="#coralModel"
-          fit-model="size: 0.40"
+          fit-model="size: 0.25"
           bleachable
+          cast-shadows
           tap-to-bleach
           class="clickable">
         </a-entity>
