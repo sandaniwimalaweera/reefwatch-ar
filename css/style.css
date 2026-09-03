@@ -1,33 +1,41 @@
 /* ============================================================
    ReefWatch AR — landing page
 
-   The palette is the shallow reef flat at Pigeon Island rather
-   than the open ocean: pale sunlit water over sand. That is not
-   a cosmetic choice. Bleaching is worst in shallow, sun-flooded
-   water, which is exactly the habitat this project is about.
+   The page is submerged. You are looking out through maybe eight
+   metres of water at Pigeon Island: the surface is above and
+   behind the masthead, caustics move across everything, and the
+   colour drains toward the abyss as you read down.
 
-   Living coral colour runs against the grey-green of coral that
-   has bleached and then been colonised by turf algae — the real
-   end state, and legible on a light ground in a way that bone
-   white would not be.
+   That is not decoration for its own sake. The AR scenes open on
+   the same abyss ground (--abyss in ar.css), so entering a mode
+   is a continuation of the same dive rather than a cut to a new
+   place. It also puts the reader where the reef is: the thing
+   being described is happening around them, not on a page.
 
-   All text colours are checked against WCAG AA: 4.5:1 for body,
-   3:1 for display type.
+   Living coral colour runs against bleached skeleton — the real
+   end state, and on a dark ground the drain reads as a light
+   going out.
+
+   All text colours are checked against WCAG AA on the darkest
+   ground the page reaches: 4.5:1 for body, 3:1 for display type.
    ============================================================ */
 
 :root {
-  --flat:     #E3F1EC;   /* sunlit shallow water — page ground */
-  --sand:     #F4EFE3;   /* sand flat, bottom of the water column */
-  --ink:      #10333A;   /* deep teal, body text            11.6:1 */
-  --ink-soft: #4A6B71;   /* secondary text                   4.9:1 */
-  --living:   #C8234C;   /* living coral tissue              4.8:1 */
-  --coral-lit:#E4436A;   /* the same, display sizes only     3.4:1 */
-  --algae:    #0A7264;   /* symbiotic algae — the accent     5.0:1 */
-  --dead:     #688281;   /* bleached, then turf-covered      3.5:1 */
+  --abyss:    #04212B;   /* deep water — the page floor            */
+  --shallow:  #0B4C5F;   /* sunlit water just under the surface    */
+  --mid:      #073B4C;   /* the water column between them          */
 
-  --rule:     rgba(16, 51, 58, 0.15);
-  --card:     rgba(255, 255, 255, 0.58);
-  --cast:     rgba(16, 51, 58, 0.06);
+  --bone:     #EAF6F4;   /* body text — bleached coral      14.8:1 */
+  --ink-soft: #9DC2C8;   /* secondary text                   7.6:1 */
+  --living:   #FF5E7D;   /* living coral tissue              5.4:1 */
+  --coral-lit:#FF7891;   /* the same, display sizes only     6.6:1 */
+  --algae:    #2ED9B4;   /* symbiotic algae — the accent     9.5:1 */
+  --dead:     #B9C8C6;   /* bleached skeleton                9.0:1 */
+
+  --rule:     rgba(157, 194, 200, 0.20);
+  --card:     rgba(9, 58, 74, 0.42);
+  --card-lit: rgba(16, 84, 104, 0.58);
+  --cast:     rgba(1, 12, 18, 0.45);
 
   --display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
   --body:    "Public Sans", ui-sans-serif, system-ui, sans-serif;
@@ -44,8 +52,8 @@ html, body {
 
 body {
   position: relative;
-  background-color: var(--flat);
-  color: var(--ink);
+  background-color: var(--abyss);
+  color: var(--bone);
   font-family: var(--body);
   font-size: 16px;
   line-height: 1.55;
@@ -54,52 +62,199 @@ body {
   overflow-x: hidden;
 }
 
-/* Looking down through shallow water: brightest at the surface,
-   warming toward sand at the bottom. Fixed rather than attached to
-   the body, because background-attachment: fixed misbehaves on
-   iOS Safari. */
+/* The water column. Light enters at the surface above the
+   masthead and is gone by the footer — reading down the page is
+   a descent. Fixed rather than attached to the body, because
+   background-attachment: fixed misbehaves on iOS Safari. */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   background:
-    radial-gradient(115% 70% at 50% -8%, #FFFFFF 0%, transparent 58%),
-    linear-gradient(180deg, var(--flat) 0%, #E8F2E9 55%, var(--sand) 100%);
+    radial-gradient(120% 62% at 50% -14%, rgba(126, 226, 226, 0.55) 0%, transparent 62%),
+    radial-gradient(90% 45% at 82% 8%, rgba(46, 217, 180, 0.16) 0%, transparent 70%),
+    linear-gradient(180deg, var(--shallow) 0%, var(--mid) 34%, var(--abyss) 78%, #010D14 100%);
+}
+
+/* Depth haze: the edges of the frame close in before the centre
+   does, the way visibility falls off underwater. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(105% 78% at 50% 34%, transparent 42%, rgba(1, 13, 20, 0.72) 100%);
 }
 
 /* ---------- Caustics ----------
-   Sunlight refracting through a moving surface, cast onto sand.
-   Fractal noise thresholded into an alpha mask gives the branching
-   net that real caustics form; a blurred radial gradient does not.
-   Rendered once as an SVG filter, so it costs nothing per frame. */
+   Sunlight refracting through a moving surface. Fractal noise is
+   the starting point, but noise on its own is fog; caustics are
+   the *contours* of a smooth field, which is why they branch and
+   close into cells.
+
+   feColorMatrix cannot draw a contour — a matrix is a linear
+   ramp, so thresholding it just makes blobs at whatever cutoff
+   you pick. feComponentTransfer can: a table of 0 1 0 1 0 1 0
+   maps the noise through three peaks, so alpha rises and falls
+   twice as the field passes each level, leaving bright ridges
+   wherever the noise crosses those values. That is the net.
+
+   Two layers at different scales and speeds, drifting past each
+   other — a single sheet slides like wallpaper, but two beating
+   against one another read as water. The noise is rendered once
+   as an SVG filter, so the animation is only a background-position
+   change and costs nothing per frame.
+
+   Two details keep the tiling invisible. feTurbulence only joins
+   up across its own edges with stitchTiles, and only when the
+   tile is a whole number of noise periods: 512 x 0.0234375 = 12
+   exactly, so the seam disappears. And the drift has to travel a
+   whole tile on both axes per cycle, or the pattern jumps back
+   sideways when the animation loops. */
 
 .caustics {
+  position: fixed;
+  inset: -20%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.34;
+  mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27512%27%20height%3D%27512%27%3E%3Cfilter%20id%3D%27c%27%20x%3D%270%27%20y%3D%270%27%20width%3D%27512%27%20height%3D%27512%27%20filterUnits%3D%27userSpaceOnUse%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.0234375%27%20numOctaves%3D%273%27%20seed%3D%277%27%20stitchTiles%3D%27stitch%27%2F%3E%3CfeColorMatrix%20type%3D%27matrix%27%20values%3D%270%200%200%200%200.78%20%200%200%200%200%201%20%200%200%200%200%200.96%20%201%200%200%200%200%27%2F%3E%3CfeComponentTransfer%3E%3CfeFuncA%20type%3D%27table%27%20tableValues%3D%270%201%200%201%200%201%200%27%2F%3E%3C%2FfeComponentTransfer%3E%3CfeGaussianBlur%20stdDeviation%3D%270.8%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27512%27%20height%3D%27512%27%20filter%3D%27url%28%23c%29%27%2F%3E%3C%2Fsvg%3E");
+  background-size: 512px 512px;
+  animation: caustic-drift 34s linear infinite;
+  /* Brightest near the surface, gone in the deep. */
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.45) 44%, transparent 84%);
+          mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.45) 44%, transparent 84%);
+}
+
+.caustics::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: inherit;
+  background-size: 300px 300px;
+  opacity: 0.55;
+  animation: caustic-drift-b 23s linear infinite;
+}
+
+@keyframes caustic-drift {
+  from { background-position: 0 0; }
+  to   { background-position: 512px 512px; }
+}
+
+@keyframes caustic-drift-b {
+  from { background-position: 0 0; }
+  to   { background-position: -300px 300px; }
+}
+
+/* ---------- Light shafts ----------
+   Sun entering a moving surface: narrow at the top, spreading and
+   dissolving with depth. They sway out of phase with one another,
+   so the page never settles into a still image. */
+
+.watercolumn {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.5;
-  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27700%27%20height%3D%27700%27%3E%3Cfilter%20id%3D%27c%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.011%27%20numOctaves%3D%273%27%20seed%3D%2711%27%2F%3E%3CfeColorMatrix%20type%3D%27matrix%27%20values%3D%270%200%200%200%201%20%200%200%200%200%201%20%200%200%200%200%201%20%201.6%200%200%200%20-0.62%27%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D%27700%27%20height%3D%27700%27%20filter%3D%27url%28%23c%29%27%2F%3E%3C%2Fsvg%3E");
-  background-size: 700px 700px;
+  overflow: hidden;
 }
 
-/* One warm shaft where the sun enters. The other two beams from
-   the dark theme are gone: on a light ground they read as haze,
-   and the page only needs one bright source. */
 .beam {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(70px);
+  position: fixed;
+  top: -12vh;
+  transform-origin: 50% 0;
+  pointer-events: none;
+  filter: blur(14px);
+  mix-blend-mode: screen;
 }
 
 .beam-a {
-  top: -28vh; right: -18vw;
-  width: 78vw; height: 78vw;
-  background: radial-gradient(circle, rgba(255, 236, 190, 0.75), transparent 66%);
+  left: 8vw;
+  width: 26vw;
+  height: 118vh;
+  background: linear-gradient(180deg, rgba(178, 244, 240, 0.34) 0%, rgba(126, 226, 226, 0.10) 42%, transparent 78%);
+  clip-path: polygon(34% 0, 66% 0, 100% 100%, 0 100%);
+  animation: sway 17s ease-in-out infinite;
 }
 
-.beam-b, .beam-c { display: none; }
+.beam-b {
+  left: 46vw;
+  width: 17vw;
+  height: 96vh;
+  background: linear-gradient(180deg, rgba(255, 250, 232, 0.30) 0%, rgba(126, 226, 226, 0.08) 46%, transparent 76%);
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  animation: sway 23s ease-in-out infinite reverse;
+  animation-delay: -6s;
+}
+
+.beam-c {
+  right: 4vw;
+  width: 30vw;
+  height: 108vh;
+  background: linear-gradient(180deg, rgba(46, 217, 180, 0.26) 0%, rgba(46, 217, 180, 0.07) 44%, transparent 74%);
+  clip-path: polygon(30% 0, 62% 0, 100% 100%, 0 100%);
+  animation: sway 29s ease-in-out infinite;
+  animation-delay: -11s;
+}
+
+@keyframes sway {
+  0%, 100% { transform: skewX(-5deg) scaleX(1);    opacity: 0.75; }
+  50%      { transform: skewX(4deg)  scaleX(1.14); opacity: 1; }
+}
+
+/* ---------- Marine snow ----------
+   Suspended particulate lifting through the shafts. It is the
+   detail that stops a blue gradient from reading as a blue
+   gradient: nothing else on the page proves the reader is inside
+   a fluid. Kept sparse and slow — plankton, not a snow globe. */
+
+.drift {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.mote {
+  position: absolute;
+  bottom: -8vh;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(214, 245, 242, 0.75);
+  box-shadow: 0 0 6px rgba(178, 244, 240, 0.5);
+  opacity: 0;
+  animation: rise linear infinite;
+}
+
+/* Each mote gets its own lane, size, pace and phase. Shared
+   values would beat in sync and read as a machine. */
+.mote:nth-child(1)  { left:  6%; width: 3px; height: 3px; animation-duration: 26s; animation-delay:  -2s; }
+.mote:nth-child(2)  { left: 14%; width: 5px; height: 5px; animation-duration: 34s; animation-delay: -14s; }
+.mote:nth-child(3)  { left: 23%; width: 2px; height: 2px; animation-duration: 21s; animation-delay:  -7s; }
+.mote:nth-child(4)  { left: 31%; width: 4px; height: 4px; animation-duration: 39s; animation-delay: -21s; }
+.mote:nth-child(5)  { left: 39%; width: 3px; height: 3px; animation-duration: 29s; animation-delay:  -4s; }
+.mote:nth-child(6)  { left: 47%; width: 6px; height: 6px; animation-duration: 44s; animation-delay: -30s; }
+.mote:nth-child(7)  { left: 54%; width: 2px; height: 2px; animation-duration: 24s; animation-delay: -11s; }
+.mote:nth-child(8)  { left: 62%; width: 4px; height: 4px; animation-duration: 36s; animation-delay: -18s; }
+.mote:nth-child(9)  { left: 70%; width: 3px; height: 3px; animation-duration: 31s; animation-delay:  -1s; }
+.mote:nth-child(10) { left: 78%; width: 5px; height: 5px; animation-duration: 41s; animation-delay: -25s; }
+.mote:nth-child(11) { left: 86%; width: 2px; height: 2px; animation-duration: 23s; animation-delay:  -9s; }
+.mote:nth-child(12) { left: 93%; width: 4px; height: 4px; animation-duration: 33s; animation-delay: -16s; }
+
+/* Rising and wandering at once: real particulate is pushed
+   sideways by the same surge that lifts it. */
+@keyframes rise {
+  0%   { transform: translate3d(0, 0, 0);           opacity: 0; }
+  12%  {                                            opacity: 0.7; }
+  50%  { transform: translate3d(22px, -55vh, 0); }
+  88%  {                                            opacity: 0.45; }
+  100% { transform: translate3d(-14px, -115vh, 0);  opacity: 0; }
+}
 
 /* ---------- Layout ---------- */
 
@@ -136,9 +291,10 @@ body::before {
   letter-spacing: -0.045em;
 }
 
-/* Each half of the name drains from living tissue to dead reef.
-   This is the entire argument of the project, stated in the type,
-   and it is the one piece of motion on the page. */
+/* Each half of the name drains from living tissue to bleached
+   skeleton. This is the entire argument of the project, stated in
+   the type, and it is the one piece of motion the reader is meant
+   to actually watch. */
 .wordmark-line {
   display: inline-block;
   background-image: linear-gradient(
@@ -179,12 +335,16 @@ body::before {
   margin: 0 0 0.85rem;
   max-width: 40ch;
   font-size: 1.04rem;
-  color: var(--ink);
+  color: var(--bone);
 }
 
 .thesis-quiet { color: var(--ink-soft); }
 
 /* ---------- Mode cards ----------
+   Panels of slightly denser water rather than paper: what is
+   behind them still shows through, so they sit in the scene
+   instead of on top of it.
+
    The two modes are not interchangeable, so they are not styled
    identically. Marker mode carries the coral accent, markerless
    the algae accent, and the coloured edge is the first thing that
@@ -197,18 +357,21 @@ body::before {
 }
 
 .mode {
+  position: relative;
   display: grid;
   gap: 0.3rem;
   min-height: 56px;                        /* comfortable thumb target */
   padding: 1.15rem 1.25rem 1.3rem;
   border: 1px solid var(--rule);
   border-left: 4px solid var(--living);
-  border-radius: 2px;
+  border-radius: 3px;
   background: var(--card);
-  box-shadow: 0 1px 2px var(--cast);
+  backdrop-filter: blur(7px) saturate(120%);
+  -webkit-backdrop-filter: blur(7px) saturate(120%);
+  box-shadow: 0 6px 22px var(--cast), inset 0 1px 0 rgba(214, 245, 242, 0.10);
   text-decoration: none;
   color: inherit;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
 }
 
 .mode + .mode { border-left-color: var(--algae); }
@@ -217,14 +380,14 @@ body::before {
    Press feedback is handled by :active instead. */
 @media (hover: hover) {
   .mode:hover {
-    background: rgba(255, 255, 255, 0.85);
-    box-shadow: 0 3px 10px var(--cast);
+    background: var(--card-lit);
+    box-shadow: 0 10px 30px var(--cast), inset 0 1px 0 rgba(214, 245, 242, 0.16);
   }
 }
 
 .mode:active {
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: none;
+  background: var(--card-lit);
+  box-shadow: 0 2px 8px var(--cast);
 }
 
 .mode:focus-visible {
@@ -246,6 +409,7 @@ body::before {
   font-size: 1.5rem;
   line-height: 1.12;
   letter-spacing: -0.02em;
+  color: var(--bone);
 }
 
 .mode-copy {
@@ -294,7 +458,7 @@ body::before {
 .readout-val {
   margin-left: auto;
   text-align: right;
-  color: var(--ink);
+  color: var(--bone);
 }
 
 .readout-pending {
@@ -316,10 +480,9 @@ body::before {
 .attrib { font-size: 0.71rem; }
 
 /* ---------- Ambience toggle ----------
-   The same control as the scenes carry, restyled for a light
-   ground. It is on the landing page because the preference is
-   remembered: turning the reef on here means it is already
-   playing by the time the camera opens. */
+   The same control as the scenes carry. It is on the landing page
+   because the preference is remembered: turning the reef on here
+   means it is already playing by the time the camera opens. */
 
 .ar-audio {
   position: fixed;
@@ -358,13 +521,20 @@ body::before {
   }
 }
 
-/* ---------- Accessibility ---------- */
+/* ---------- Accessibility ----------
+   The underwater motion is ambient, not informational, so all of
+   it is safe to stop. Each element parks somewhere that still
+   looks deliberate rather than simply switched off. */
 
 @media (prefers-reduced-motion: reduce) {
   .drain {
     animation: none;
     background-position: 55% 0;   /* parked mid-drain, still legible */
   }
+  .caustics,
+  .caustics::after,
+  .beam { animation: none; }
+  .drift { display: none; }
   .mode { transition: none; }
   .ar-audio { transition: none; }
 }

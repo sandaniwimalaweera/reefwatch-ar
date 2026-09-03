@@ -15,11 +15,25 @@
 </head>
 <body>
 
-  <!-- Sunlight through water. Purely decorative. -->
-  <div class="caustics" aria-hidden="true">
+  <!-- The water the page sits in. Purely decorative, and kept in
+       three separate layers because each one is composited
+       differently: the shafts are screened over the depth
+       gradient, the caustics are screened and masked on top of
+       those, and the particulate has to stay unmasked so it can
+       drift the full height of the viewport. -->
+  <div class="watercolumn" aria-hidden="true">
     <span class="beam beam-a"></span>
     <span class="beam beam-b"></span>
     <span class="beam beam-c"></span>
+  </div>
+
+  <div class="caustics" aria-hidden="true"></div>
+
+  <div class="drift" aria-hidden="true">
+    <span class="mote"></span><span class="mote"></span><span class="mote"></span>
+    <span class="mote"></span><span class="mote"></span><span class="mote"></span>
+    <span class="mote"></span><span class="mote"></span><span class="mote"></span>
+    <span class="mote"></span><span class="mote"></span><span class="mote"></span>
   </div>
 
   <!-- The ambience follows the user in from here: the preference is
