@@ -1,13 +1,10 @@
-/* ============================================================
-   ReefWatch AR — markerless scene
+/* ReefWatch AR — markerless scene
 
    WebXR hit-testing places a reef section on a real surface.
    Sea temperature then drives how bleached that reef appears.
-   Shared components live in js/lib-reef.js.
-   ============================================================ */
+   Shared components live in js/lib-reef.js. */
 
-/* ------------------------------------------------------------
-   Bleaching model
+/* Bleaching model
 
    A deliberate simplification for visualisation. Real bleaching
    depends on accumulated heat stress over weeks (Degree Heating
@@ -15,8 +12,7 @@
    the report and in the app's own credits.
 
    Thresholds are anchored on the regional monthly maximum for
-   Sri Lankan reefs, around 29 °C.
-   ------------------------------------------------------------ */
+   Sri Lankan reefs, around 29 °C. */
 const BLEACH = {
   safe:  29.0,   // below this: no visible stress
   fatal: 31.5,   // at or above this: fully bleached
@@ -36,12 +32,9 @@ const BLEACH = {
   }
 };
 
-/* ------------------------------------------------------------
-   reef-state
-   Single source of truth for the current temperature. Anything
+/* Single source of truth for the current temperature. Anything
    that needs to react listens for the `temperature-change`
-   event rather than reaching into this component.
-   ------------------------------------------------------------ */
+   event rather than reaching into this component. */
 AFRAME.registerComponent('reef-state', {
   schema: {
     celsius: { type: 'number', default: 28.0 }
@@ -57,11 +50,8 @@ AFRAME.registerComponent('reef-state', {
   }
 });
 
-/* ------------------------------------------------------------
-   temperature-driven
-   Puts this entity's `bleachable` amount under the control of
-   the scene temperature.
-   ------------------------------------------------------------ */
+/* Puts this entity's `bleachable` amount under the control of
+   the scene temperature. */
 AFRAME.registerComponent('temperature-driven', {
   schema: {
     ease: { type: 'number', default: 2.2 }   // seconds to catch up
@@ -86,11 +76,7 @@ AFRAME.registerComponent('temperature-driven', {
     this.el.setAttribute('bleachable', 'amount', this.current);
   }
 });
-
-/* ------------------------------------------------------------
-   hit-test-placer
-
-   Hit-testing implemented directly against the WebXR Device API
+/* Hit-testing implemented directly against the WebXR Device API
    rather than through A-Frame's ar-hit-test component, which
    throws during init on some builds when it reads the scene's
    webxr configuration before that component has attached.
@@ -100,8 +86,7 @@ AFRAME.registerComponent('temperature-driven', {
        → requestHitTestSource
        → per-frame getHitTestResults
        → pose in the local reference space
-       → createAnchor on placement
-   ------------------------------------------------------------ */
+       → createAnchor on placement */
 AFRAME.registerComponent('hit-test-placer', {
   schema: {
     reticle: { type: 'selector' },
@@ -316,10 +301,7 @@ AFRAME.registerComponent('hit-test-placer', {
   }
 });
 
-/* ------------------------------------------------------------
-   sensor-ar
-
-   Markerless tracking for devices that cannot run WebXR. Every
+/* Markerless tracking for devices that cannot run WebXR. Every
    iPhone falls here, because iOS Safari does not implement
    immersive-ar at all, as do Android devices that are not
    ARCore-certified. Without a second path, half this project
@@ -345,8 +327,7 @@ AFRAME.registerComponent('hit-test-placer', {
    Honest limitation: there is no positional tracking. Rotation is
    tracked, translation is not, so the reef holds its place when the
    phone turns but follows the user if they walk. Only WebXR gives
-   true six degrees of freedom. Recorded in docs/TESTING.md.
-   ------------------------------------------------------------ */
+   true six degrees of freedom. Recorded in docs/TESTING.md. */
 AFRAME.registerComponent('sensor-ar', {
   schema: {
     reticle:   { type: 'selector' },
@@ -547,8 +528,7 @@ AFRAME.registerComponent('sensor-ar', {
     camEl.setAttribute('camera', 'fov', this.fov);
   },
 
-  /* ----------------------------------------------------------
-     Orientation, and the yaw drift that breaks anchoring on iOS.
+  /* Orientation, and the yaw drift that breaks anchoring on iOS.
 
      `alpha` is supposed to be the heading. On Android it is, and
      `deviceorientationabsolute` says so. On iOS it is not: Safari
@@ -570,8 +550,7 @@ AFRAME.registerComponent('sensor-ar', {
      the truth, and the reef stays on its bearing.
 
      `webkitCompassHeading` runs clockwise from north; `alpha` runs
-     anticlockwise, hence the subtraction from 360.
-     ---------------------------------------------------------- */
+     anticlockwise, hence the subtraction from 360. */
   onOrientation: function (ev) {
     if (ev.alpha === null || ev.alpha === undefined) return;
 
@@ -749,9 +728,6 @@ AFRAME.registerComponent('sensor-ar', {
   }
 });
 
-/* ------------------------------------------------------------
-   Scene wiring
-   ------------------------------------------------------------ */
 document.addEventListener('DOMContentLoaded', () => {
   const scene     = document.querySelector('a-scene');
   const placer    = document.getElementById('placer');
@@ -775,8 +751,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let mode = null;          // 'webxr' | 'sensor'
   let siteLabel = 'Manual control';
   let trackingLabel = null;
-
-  /* ---------- messaging helpers ---------- */
 
   const say = (title, copy) => {
     scanMsg.hidden = false;
@@ -809,8 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return (name ? name + ': ' : '') + ((err && err.message) || 'Unknown error.');
   };
 
-  /* ---------- capability detection ----------
-     WebXR is preferred because it gives true six-degrees-of-
+  /* WebXR is preferred because it gives true six-degrees-of-
      freedom tracking. The sensor path is the fallback for iOS
      and for Android devices that are not ARCore-certified. */
 
@@ -839,8 +812,6 @@ document.addEventListener('DOMContentLoaded', () => {
         'ARKit instead.';
     }
   });
-
-  /* ---------- starting ---------- */
 
   startBtn.addEventListener('click', () => {
     startBtn.disabled = true;
@@ -907,8 +878,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /* ---------- WebXR session events ---------- */
-
   scene.addEventListener('enter-vr', () => {
     if (!scene.is('ar-mode')) return;
     // Handing off to a native viewer from inside a live XR session
@@ -930,8 +899,6 @@ document.addEventListener('DOMContentLoaded', () => {
     placed = false;
     reef.setAttribute('visible', false);
   });
-
-  /* ---------- tracking feedback (both paths) ---------- */
 
   placer.addEventListener('hit-test-ready', () =>
     say('Looking for a surface', 'Move your phone slowly across the floor.'));
@@ -986,8 +953,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  /* ---------- placement ---------- */
-
   const onPlaced = () => {
     placed = true;
     scanMsg.classList.remove('is-visible');
@@ -1020,8 +985,6 @@ document.addEventListener('DOMContentLoaded', () => {
         'Tap again to place the reef somewhere else.');
   });
 
-  /* ---------- temperature ---------- */
-
   const setTemp = (c) => scene.setAttribute('reef-state', 'celsius', c);
 
   slider.addEventListener('input', () => setTemp(parseFloat(slider.value)));
@@ -1047,8 +1010,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  /* ---------- live data ----------
-     The slider stays available either way, so the user can explore
+  /* The slider stays available either way, so the user can explore
      temperatures the sea is not currently at. The HUD always says
      where the starting figure came from. */
   if (window.ReefAPI && typeof window.ReefAPI.load === 'function') {
@@ -1073,8 +1035,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hudSite.textContent = siteLabel;
   }
 
-  /* ---------- ARKit hand-off ----------
-     On iOS this is the only path to real six-degrees-of-freedom
+  /* On iOS this is the only path to real six-degrees-of-freedom
      tracking: Safari implements no WebXR, so the reef is handed to
      AR Quick Look, which is ARKit in a native viewer. On Android it
      resolves to Scene Viewer or WebXR. js/arkit.js reports whether
@@ -1120,8 +1081,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // arkit.js can settle before this listener exists, so read it once.
   if (window.ReefARKit && window.ReefARKit.supported) showARKit(window.ReefARKit);
 
-  /* ---------- on-device diagnostics ----------
-     Add ?debug to the URL for a live readout of the sensor path, and
+  /* Add ?debug to the URL for a live readout of the sensor path, and
      ?fov=NN to override the assumed camera field of view without
      editing the page — the two things that cannot be checked from a
      desktop browser and decide whether the reef holds its place. */

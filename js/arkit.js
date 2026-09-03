@@ -1,40 +1,24 @@
-/* ============================================================
-   ReefWatch AR — ARKit hand-off
+/* ReefWatch AR — ARKit hand-off
 
-   Safari on iOS does not implement the WebXR Device API. There is
-   no immersive-ar, no immersive-vr, and no route from JavaScript
-   to ARKit. The sensor fallback in js/xr-scene.js reconstructs what
-   it can from the camera and the gyroscope, but it tracks rotation
-   only: the reef holds its bearing and follows the user if they
-   walk, because nothing in the browser can measure that the user
-   walked.
-
-   ARKit itself is reachable, but only by handing the model to the
-   operating system. AR Quick Look is a native viewer built on
-   ARKit, and Safari launches it for a link marked `rel="ar"`
-   pointing at a USDZ. Inside it the reef gets what no web API on
-   this platform can offer:
-
-     visual-inertial SLAM   → six degrees of freedom, so walking
-                              around the reef actually works
-     plane detection        → the reef sits on the real floor
-     world anchoring        → it stays there
-     real contact shadows and scale
+   The sensor fallback in js/xr-scene.js tracks rotation only, for
+   the reasons set out there. ARKit is still reachable on iOS, but
+   only by handing the model to the operating system: AR Quick Look
+   is a native viewer built on ARKit, and Safari launches it for a
+   link marked `rel="ar"` pointing at a USDZ. Inside it the reef
+   gets visual-inertial SLAM, real plane detection and world
+   anchoring — so walking around the reef works.
 
    The cost is that Quick Look is Apple's viewer, not this page.
    The temperature control cannot live inside it, so the reef is
    exported at whatever temperature the page is showing when the
    button is pressed. Change the slider, open it again.
 
-   <model-viewer> is used rather than hand-rolling the export. It
-   converts the GLB to USDZ on the fly when the AR button is used
-   on Safari, and picks Scene Viewer or WebXR on Android, so one
-   button covers every device that has native AR at all.
-
-   Note for Chrome on iOS: an auto-generated USDZ does not launch
-   there, only in Safari. The button reports that rather than
-   appearing to do nothing.
-   ============================================================ */
+   <model-viewer> does the export rather than hand-rolled USDZ. It
+   converts the GLB on the fly for Safari and picks Scene Viewer or
+   WebXR on Android, so one button covers every device that has
+   native AR at all. On Chrome and Firefox for iOS a generated USDZ
+   does not launch at all; the button reports that rather than
+   appearing to do nothing. */
 
 (function () {
   'use strict';
@@ -65,8 +49,7 @@
   };
   window.ReefARKit = api;
 
-  /* ---------- capability ----------
-     Quick Look needs Safari on iOS; Scene Viewer needs Android with
+  /* Quick Look needs Safari on iOS; Scene Viewer needs Android with
      Google Play Services for AR. `canActivateAR` on the element is
      the honest answer for both, but it is only meaningful once the
      component has upgraded, so the coarse check runs first and the
@@ -90,8 +73,7 @@
     return;
   }
 
-  /* ---------- the offscreen viewer ----------
-     model-viewer has to have loaded the model before it can convert
+  /* model-viewer has to have loaded the model before it can convert
      it, and it will not load while it has no layout box, so it is
      kept a single transparent pixel rather than display:none. */
 
@@ -157,8 +139,7 @@
     document.dispatchEvent(new CustomEvent('arkit-status', { detail: api }));
   }
 
-  /* ---------- bleaching ----------
-     The same curve as the `bleachable` component: colour lerped
+  /* The same curve as the `bleachable` component: colour lerped
      toward bone, roughness up as living tissue turns to chalk,
      metalness down. Kept in step so the reef the user sends to
      ARKit is the reef they were just looking at. */
@@ -184,8 +165,7 @@
     applyBleach();
   };
 
-  /* ---------- launch ----------
-     Called straight from the tap. Quick Look is opened by a user
+  /* Called straight from the tap. Quick Look is opened by a user
      gesture; putting an await in front of it loses the gesture and
      Safari offers a download instead of the viewer. */
 
@@ -198,8 +178,6 @@
     viewer.activateAR();
     return true;
   };
-
-  /* ---------- load the component ---------- */
 
   const script = document.createElement('script');
   script.type = 'module';

@@ -1,9 +1,7 @@
-/* ============================================================
-   ReefWatch AR — AR overlay chrome
+/* ReefWatch AR — AR overlay chrome
    Shared by marker.html and markerless.html.
    Everything here floats above the camera feed, so contrast
-   and safe-area insets matter more than usual.
-   ============================================================ */
+   and safe-area insets matter more than usual. */
 
 :root {
   --abyss:   #04212B;
@@ -43,7 +41,7 @@ html, body {
   background: transparent !important;
 }
 
-/* ---------- Camera feed (marker page only) ----------
+/* Camera feed (marker page only)
    MindAR injects its own <video> for the camera stream, and on
    iOS Safari it is left unsized behind an opaque canvas, which
    shows as a black background with the model floating on it.
@@ -87,7 +85,7 @@ html, body {
 
 /* Overlay chrome must sit above the canvas */
 
-/* ---------- Scanning prompt ---------- */
+/* Scanning prompt */
 
 .ar-prompt {
   position: fixed;
@@ -170,7 +168,7 @@ html, body {
 .ar-prompt.is-error .ar-prompt-inner { border-color: var(--living); }
 .ar-prompt.is-error .ar-scanline { display: none; }
 
-/* ---------- Tap hint ---------- */
+/* Tap hint */
 
 .ar-hint {
   position: fixed;
@@ -198,7 +196,7 @@ html, body {
   transform: translate(-50%, 0);
 }
 
-/* ---------- Species card ---------- */
+/* Species card */
 
 .ar-card {
   position: fixed;
@@ -252,7 +250,7 @@ html, body {
   color: rgba(255, 244, 234, 0.74);
 }
 
-/* ---------- Back link ---------- */
+/* Back link */
 
 .ar-back {
   position: fixed;
@@ -280,11 +278,9 @@ html, body {
   .ar-prompt, .ar-card, .ar-hint { transition: none; }
 }
 
-/* ============================================================
-   Markerless scene chrome
+/* Markerless scene chrome
    The DOM overlay stays on screen during the WebXR session, so
-   it has to survive being composited over a live camera feed.
-   ============================================================ */
+   it has to survive being composited over a live camera feed. */
 
 .xr-overlay {
   position: fixed;
@@ -295,7 +291,7 @@ html, body {
 
 .xr-overlay > * { pointer-events: auto; }
 
-/* ---------- Entry gate ---------- */
+/* Entry gate */
 
 .ar-gate {
   position: fixed;
@@ -365,7 +361,7 @@ html, body {
 
 .ar-btn:active { transform: translateY(1px); }
 
-/* ---------- ARKit hand-off ----------
+/* ARKit hand-off
    The <model-viewer> that converts the reef to USDZ has to have a
    layout box before it will load the model, so it is a single
    transparent pixel rather than display:none. */
@@ -440,7 +436,7 @@ html, body {
   padding-bottom: 2px;
 }
 
-/* ---------- Scanning guidance ---------- */
+/* Scanning guidance */
 
 .ar-scan {
   position: fixed;
@@ -490,7 +486,7 @@ html, body {
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
 }
 
-/* ---------- HUD ---------- */
+/* HUD */
 
 .hud {
   position: fixed;
@@ -564,7 +560,7 @@ html, body {
   color: rgba(255, 244, 234, 0.5);
 }
 
-/* ---------- Slider ---------- */
+/* Slider */
 
 .hud-slider {
   display: block;
@@ -657,7 +653,7 @@ html, body {
   display: none !important;
 }
 
-/* ---------- Sensor fallback ----------
+/* Sensor fallback
    The camera feed is a plain <video> behind a transparent canvas,
    rather than the WebXR compositor. */
 
@@ -720,11 +716,9 @@ html, body {
    user is never misled into thinking it is a live reading. */
 .hud-site.is-stale { color: var(--warning); }
 
-/* ============================================================
-   Loading, audio and credits
-   ============================================================ */
+/* Loading, audio and credits */
 
-/* ---------- Asset loading ----------
+/* Asset loading
    Models are small but a phone on mobile data still takes a
    moment. Silence during that window reads as a broken page. */
 
@@ -769,7 +763,7 @@ html, body {
   color: rgba(255, 244, 234, 0.6);
 }
 
-/* ---------- Audio toggle ---------- */
+/* Audio toggle */
 
 .ar-audio {
   position: fixed;
@@ -796,7 +790,7 @@ html, body {
 .ar-audio.is-on .icon-off { display: none; }
 .ar-audio.is-on { border-color: var(--algae); color: var(--algae); }
 
-/* ---------- Credits sheet ---------- */
+/* Credits sheet */
 
 .credits-open {
   background: none;

@@ -1,5 +1,4 @@
-/* ============================================================
-   ReefWatch AR — audio
+/* ReefWatch AR — audio
 
    One AudioContext for the whole app, feeding two things:
 
@@ -25,8 +24,7 @@
    noise that decays exponentially and darkens as it goes, because
    water absorbs high frequencies far faster than low ones. That
    one filter is most of the difference between "underwater" and
-   "static".
-   ============================================================ */
+   "static". */
 
 (function (global) {
   'use strict';
@@ -54,10 +52,6 @@
     this.health = 1;            // 1 = living reef, 0 = bleached
     this.lastSfx = 0;
   }
-
-  /* ----------------------------------------------------------
-     The graph
-     ---------------------------------------------------------- */
 
   ReefAudio.prototype._ensure = function () {
     if (this.built) return true;
@@ -168,14 +162,10 @@
     return buf;
   };
 
-  /* ----------------------------------------------------------
-     The bed
-
-     Built once and left running for the life of the page. Muting
+  /* Built once and left running for the life of the page. Muting
      ramps the bus, it does not tear the graph down: rebuilding
      these nodes on every toggle is audible as a click, and on iOS
-     it risks a context that never resumes.
-     ---------------------------------------------------------- */
+     it risks a context that never resumes. */
   ReefAudio.prototype._buildBed = function () {
     var ctx = this.ctx;
 
@@ -184,7 +174,7 @@
     noise.loop = true;
     noise.start();
 
-    /* --- the body of water: low, wide, always there --- */
+    /* the body of water: low, wide, always there */
     var body = ctx.createBiquadFilter();
     body.type = 'lowpass';
     body.frequency.value = 340;
@@ -210,7 +200,7 @@
     driftDepth.connect(body.frequency);
     drift.start();
 
-    /* --- surge: a narrower voice that breathes over the top --- */
+    /* surge: a narrower voice that breathes over the top */
     var surge = ctx.createBiquadFilter();
     surge.type = 'bandpass';
     surge.frequency.value = 200;
@@ -231,7 +221,7 @@
     swellDepth.connect(surgeGain.gain);
     swell.start();
 
-    /* --- the weight of deep water --- */
+    /* the weight of deep water */
     var droneGain = ctx.createGain();
     droneGain.gain.value = 0.045;
     droneGain.connect(this.bed);
@@ -256,21 +246,18 @@
       osc.start();
     });
 
-    /* --- snapping shrimp --- */
+    /* snapping shrimp */
     this.crackle = ctx.createGain();
     this.crackle.gain.value = 1;
     this.crackle.connect(this.bed);
 
-    /* --- bubbles --- */
+    /* bubbles */
     this.bubbles = ctx.createGain();
     this.bubbles.gain.value = 1;
     this.bubbles.connect(this.bed);
   };
 
-  /* ----------------------------------------------------------
-     Voices
-
-     Snapping shrimp are the loudest thing on a healthy reef and
+  /* Snapping shrimp are the loudest thing on a healthy reef and
      among the first to vanish when one dies, so scheduling them at
      a rate tied to reef health makes the bleaching audible as well
      as visible.
@@ -278,8 +265,7 @@
      Filtered noise, not the square wave this used to use. A square
      wave through a bandpass is a pitched blip; real snaps are
      broadband and have no pitch at all, and hearing twenty pitched
-     ones a second is what made the old bed sound like interference.
-     ---------------------------------------------------------- */
+     ones a second is what made the old bed sound like interference. */
   ReefAudio.prototype._scheduleCrackle = function () {
     var self = this;
     var gap = 0.05 + Math.random() * (0.45 + (1 - this.health) * 2.5);
@@ -357,13 +343,9 @@
     osc.stop(t + dur * 2 + 0.05);
   };
 
-  /* ----------------------------------------------------------
-     Interface sounds
-
-     The same droplet at three pitches rather than three unrelated
-     sounds. An interface that chimes in a different timbre on every
-     press stops belonging to the reef very quickly.
-     ---------------------------------------------------------- */
+  /* The same droplet at six pitches rather than six unrelated sounds.
+     An interface that chimes in a different timbre on every press
+     stops belonging to the reef very quickly. */
   var SFX = {
     tap:  { from: 520, to: 1180, dur: 0.09, gain: 0.10 },
     open: { from: 400, to: 1000, dur: 0.13, gain: 0.11 },
@@ -423,10 +405,6 @@
     tickEnv.connect(this.ui);
     tick.start(now, Math.random() * (this.noiseBuf.duration - 0.2), 0.05);
   };
-
-  /* ----------------------------------------------------------
-     Transport
-     ---------------------------------------------------------- */
 
   ReefAudio.prototype.start = function () {
     if (!this._ensure()) return Promise.reject(new Error('Web Audio not supported'));
@@ -502,15 +480,11 @@
   global.ReefAudio = audio;
   global.ReefAmbience = audio;      // the name the scenes already use
 
-  /* ----------------------------------------------------------
-     Always there
-
-     Autoplay is blocked without a gesture, so the bed cannot
+  /* Autoplay is blocked without a gesture, so the bed cannot
      simply start on load. It arms instead: the first touch
      anywhere on the page starts it, and the preference is
      remembered, so it carries from the landing page into a scene
-     without ever asking again.
-     ---------------------------------------------------------- */
+     without ever asking again. */
   function arm () {
     var events = ['pointerdown', 'touchstart', 'keydown'];
 
@@ -533,13 +507,9 @@
     }
   }
 
-  /* ----------------------------------------------------------
-     Interface sounds, wired once for every page
-
-     Delegated rather than bound per button, so a control a scene
+  /* Delegated rather than bound per button, so a control a scene
      adds at runtime — the ARKit button, the credits sheet — makes
-     a sound without having to remember to wire it.
-     ---------------------------------------------------------- */
+     a sound without having to remember to wire it. */
   var SELECTOR = 'button, a[href], [data-sfx]';
 
   function soundFor (el) {

@@ -1,5 +1,4 @@
-/* ============================================================
-   ReefWatch AR — landing page
+/* ReefWatch AR — landing page
 
    The page is submerged. You are looking out through maybe eight
    metres of water at Pigeon Island: the surface is above and
@@ -17,8 +16,7 @@
    going out.
 
    All text colours are checked against WCAG AA on the darkest
-   ground the page reaches: 4.5:1 for body, 3:1 for display type.
-   ============================================================ */
+   ground the page reaches: 4.5:1 for body, 3:1 for display type. */
 
 :root {
   --abyss:    #04212B;   /* deep water — the page floor            */
@@ -88,7 +86,7 @@ body::after {
   background: radial-gradient(105% 78% at 50% 34%, transparent 42%, rgba(1, 13, 20, 0.72) 100%);
 }
 
-/* ---------- Caustics ----------
+/* Caustics
    Sunlight refracting through a moving surface. Fractal noise is
    the starting point, but noise on its own is fog; caustics are
    the *contours* of a smooth field, which is why they branch and
@@ -149,7 +147,7 @@ body::after {
   to   { background-position: -300px 300px; }
 }
 
-/* ---------- Light shafts ----------
+/* Light shafts
    Sun entering a moving surface: narrow at the top, spreading and
    dissolving with depth. They sway out of phase with one another,
    so the page never settles into a still image. */
@@ -205,7 +203,7 @@ body::after {
   50%      { transform: skewX(4deg)  scaleX(1.14); opacity: 1; }
 }
 
-/* ---------- Marine snow ----------
+/* Marine snow
    Suspended particulate lifting through the shafts. It is the
    detail that stops a blue gradient from reading as a blue
    gradient: nothing else on the page proves the reader is inside
@@ -256,7 +254,7 @@ body::after {
   100% { transform: translate3d(-14px, -115vh, 0);  opacity: 0; }
 }
 
-/* ---------- Layout ---------- */
+/* Layout */
 
 .shell {
   position: relative;
@@ -269,7 +267,7 @@ body::after {
   padding-bottom: calc(2.5rem + env(safe-area-inset-bottom));
 }
 
-/* ---------- Masthead ---------- */
+/* Masthead */
 
 /* The site name, not a category label. It ties the headline to the
    coordinates in the readout below. */
@@ -340,7 +338,7 @@ body::after {
 
 .thesis-quiet { color: var(--ink-soft); }
 
-/* ---------- Mode cards ----------
+/* Mode cards
    Panels of slightly denser water rather than paper: what is
    behind them still shows through, so they sit in the scene
    instead of on top of it.
@@ -430,7 +428,7 @@ body::after {
 
 .mode + .mode .mode-go { color: var(--algae); }
 
-/* ---------- Data readout ----------
+/* Data readout
    Monospace here is doing real work: these are coordinates and
    instrument readings, and the figures should align. */
 
@@ -466,7 +464,7 @@ body::after {
   font-style: italic;
 }
 
-/* ---------- Footnote ---------- */
+/* Footnote */
 
 .footnote {
   margin-top: 2rem;
@@ -479,7 +477,7 @@ body::after {
 
 .attrib { font-size: 0.71rem; }
 
-/* ---------- Ambience toggle ----------
+/* Ambience toggle
    The same control as the scenes carry. It is on the landing page
    because the preference is remembered: turning the reef on here
    means it is already playing by the time the camera opens. */
@@ -511,7 +509,7 @@ body::after {
 .ar-audio.is-on { color: var(--algae); border-color: var(--algae); }
 .ar-audio:focus-visible { outline: 2px solid var(--algae); outline-offset: 2px; }
 
-/* ---------- Wider screens ---------- */
+/* Wider screens */
 
 @media (min-width: 720px) {
   .shell { max-width: 720px; }
@@ -521,7 +519,7 @@ body::after {
   }
 }
 
-/* ---------- Accessibility ----------
+/* Accessibility
    The underwater motion is ambient, not informational, so all of
    it is safe to stop. Each element parks somewhere that still
    looks deliberate rather than simply switched off. */

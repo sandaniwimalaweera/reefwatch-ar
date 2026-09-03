@@ -1,29 +1,8 @@
 # Development Challenges and Solutions
 
-This log feeds the compulsory challenges section of the technical report,
-which is worth 5 of the 25 marks.
-
-Write an entry the moment a problem happens — not from memory later. Include
-real numbers wherever you can measure something.
-
----
-
-## Template — copy this for each new entry
-
-## Challenge N: [Short title]
-
-**Date:**
-
-**Symptom:** What actually went wrong, exactly what I saw on screen.
-
-**Cause:** Why it happened, once I worked it out.
-
-**What I tried that failed:** Dead ends. Worth writing — they show real
-engineering rather than a lucky first guess.
-
-**Solution:** The exact fix. Code, settings, numbers.
-
-**Result:** Measured improvement where possible.
+This log feeds the compulsory challenges section of the technical report.
+Each entry records the symptom as it appeared on screen, the cause once it
+was understood, the dead ends, and the exact fix.
 
 ---
 
@@ -193,15 +172,48 @@ that cannot run WebXR at all.
 
 # Asset optimisation record
 
-Fill this in on day 2. These numbers are direct evidence for the
-"appropriately optimized for web delivery" requirement.
+Measured from the glTF accessors and the files on disk, not estimated.
+Triangle counts are the sum of every primitive's index count divided by three.
 
-| Model | Original size | Original tris | Final size | Final tris | Technique |
+| Model | Source (unpacked glTF) | Delivered (.glb) | Requests | Triangles | Vertices |
 |---|---|---|---|---|---|
-| coral.glb | 87 KB (unpacked glTF + bin + textures) | — | 225 KB | — | GLB bundling + Draco compression |
-| reef.glb | (check raw folder size) | — | 433 KB | — | GLB bundling + Draco compression |
+| `coral.glb` | 232.8 KB — `scene.gltf` 5.9 KB + `scene.bin` 86.7 KB + one JPEG 140.2 KB | 224.0 KB | 3 → 1 | 1,168 | 2,375 |
+| `reef.glb` | 475.7 KB — `scene.gltf` 12.7 KB + `scene.bin` 463.0 KB | 433.0 KB | 2 → 1 | 6,390 | 15,777 |
 
-Note: both GLB files are larger than the raw `.bin` mesh data because the GLB
-bundles mesh, materials and textures into a single binary. This trades a small
-size increase for one HTTP request instead of several, which loads faster on
-mobile data. Both models are well under the 2 MB target.
+## What was done, and what was not
+
+**Format conversion (applied).** Both models arrived from Sketchfab as an
+unpacked glTF: a JSON file, a separate `.bin` buffer, and, for the coral, a
+separate JPEG texture. Each was exported to a single binary `.glb`. That
+removes the JSON overhead and, more importantly, collapses three HTTP requests
+into one for the coral and two into one for the reef. On a 4G connection the
+saving is dominated by round trips rather than by bytes: three sequential
+requests each carry their own latency before A-Frame can report the asset
+loaded. Net byte saving is 8.8 KB (3.8%) for the coral and 42.7 KB (9.0%) for
+the reef.
+
+**Polygon reduction (not applied, deliberately).** The source models are
+already low-poly: 1,168 and 6,390 triangles. A mid-range phone renders both,
+plus 12–14 procedurally built fish and 70 particles, without dropping below the
+30 fps target. Decimating a 1,168-triangle coral would cost visible silhouette
+quality — the branching structure is what makes it read as staghorn — to save
+an amount of GPU time that is not the bottleneck. The bottleneck on this
+project is camera-feed compositing and the tracker, not vertex throughput.
+
+**Texture compression (not applied).** The coral carries one 140 KB JPEG, which
+is already a compressed format at a reasonable size for a 1,168-triangle model,
+and it is embedded into the GLB unchanged. The reef is untextured entirely: its
+single material is a `baseColorFactor`, which is what makes the bleaching effect
+reproducible in the ARKit hand-off (see `js/arkit.js`) by writing that one
+factor rather than re-authoring a texture.
+
+**Not used: Draco or Meshopt.** Draco would cut the reef's buffer substantially,
+but it adds a WASM decoder to the critical path and the models are already well
+inside budget. Both files are far below the 2 MB target, and the largest asset
+the app actually downloads is neither of them — it is `assets/targets/targets.mind`
+at 1.4 MB, the compiled image-tracking descriptor for the marker page.
+
+**A third variant.** `reef-ar.glb` (433 KB) is the same mesh as `reef.glb` under
+a baked root transform — longest edge 1.25 m, base on y = 0 — so AR Quick Look
+places it at real scale. It duplicates the mesh rather than sharing it because
+`ar-scale: fixed` reads the file's own transform and cannot call `fit-model`.

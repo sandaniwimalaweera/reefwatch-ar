@@ -70,8 +70,11 @@ Open the generated `https://…trycloudflare.com` link on your phone.
 
 ## Printing the marker
 
-The marker card is at `assets/marker-print.pdf`. Print it at A5 on matte paper
-if you can — gloss reflects light and hurts tracking.
+The marker image is `assets/targets/marker.jpg`. Print it at A5 on matte paper
+if you can — gloss reflects light and hurts tracking. The compiled tracking
+descriptor the page actually loads is `assets/targets/targets.mind`, built from
+that same image with the MindAR image-target compiler; recompile it if you
+replace the picture.
 
 ---
 
@@ -81,10 +84,23 @@ if you can — gloss reflects light and hurts tracking.
 index.html          Landing page, mode selection
 marker.html         Image-tracking scene
 markerless.html     WebXR hit-test scene
-css/style.css       Shared styling
-js/                 api.js, bleach.js, marker-scene.js, xr-scene.js, ui.js
-assets/             models, image targets, audio
-docs/               CHALLENGES.md, TESTING.md, report
+
+css/style.css       Landing page
+css/ar.css          Overlay chrome for both AR pages
+
+js/lib-reef.js      Shared A-Frame components: fit-model, bleachable,
+                    reef-school (boids), marine-snow, caustics, contact-shadow
+js/marker-scene.js  Marker page: tap-to-bleach and UI wiring
+js/xr-scene.js      Markerless page: hit-test placement, sensor fallback,
+                    the bleaching model and the HUD
+js/api.js           Open-Meteo request, caching and fallback
+js/arkit.js         AR Quick Look hand-off via <model-viewer>
+js/ambience.js      Procedural Web Audio ambience and interface sounds
+js/ui.js            Asset loader and credits sheet
+
+assets/models/      coral.glb, reef.glb, reef-ar.glb, plus the raw downloads
+assets/targets/     marker.jpg and the compiled targets.mind
+docs/               CHALLENGES.md, TESTING.md
 ```
 
 ## Browser support

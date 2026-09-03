@@ -1,23 +1,17 @@
-/* ============================================================
-   ReefWatch AR — shared interface behaviour
+/* ReefWatch AR — shared interface behaviour
 
    Asset loading feedback and the credits sheet. Used by both
    scenes. The audio button and the interface sounds wire
    themselves in js/ambience.js, so that they also work on the
-   landing page, which loads none of this.
-   ============================================================ */
+   landing page, which loads none of this. */
 
 (function () {
   'use strict';
 
-  /* ------------------------------------------------------------
-     Loading progress
-
-     A-Frame blocks the scene until every a-asset-item resolves.
+  /* A-Frame blocks the scene until every a-asset-item resolves.
      On mobile data that is a few seconds of nothing, which reads
      as a broken page — so report progress and only then reveal
-     the scene.
-     ------------------------------------------------------------ */
+     the scene. */
   function setupLoader () {
     const loader = document.getElementById('loader');
     if (!loader) return;
@@ -65,14 +59,10 @@
     setTimeout(finish, 12000);
   }
 
-  /* ------------------------------------------------------------
-     The reef gets quieter as it bleaches
-
-     Snapping shrimp and fish leave a dying reef, so the soundscape
+  /* Snapping shrimp and fish leave a dying reef, so the soundscape
      thins out with the colour. The toggle itself lives in
      js/ambience.js; this is only the link from the scene's state
-     to the sound.
-     ------------------------------------------------------------ */
+     to the sound. */
   function setupAudio () {
     const scene = document.querySelector('a-scene');
     if (!scene || !window.ReefAudio) return;
@@ -93,12 +83,9 @@
     scene.addEventListener('reef-state-change', () => window.ReefAudio.sfx('tap'));
   }
 
-  /* ------------------------------------------------------------
-     Credits sheet
-     Open-Meteo data is CC BY 4.0 and the models are CC-BY, so
+  /* Open-Meteo data is CC BY 4.0 and the models are CC-BY, so
      attribution has to be reachable from inside the app itself,
-     not only from the repository.
-     ------------------------------------------------------------ */
+     not only from the repository. */
   function setupCredits () {
     const sheet = document.getElementById('credits');
     if (!sheet) return;

@@ -1,13 +1,8 @@
-/* ============================================================
-   ReefWatch AR — marker scene
+/* ReefWatch AR — marker scene
    Image tracking with MindAR. Tap the coral to bleach it.
-   Shared components live in js/lib-reef.js.
-   ============================================================ */
+   Shared components live in js/lib-reef.js. */
 
-/* ------------------------------------------------------------
-   tap-to-bleach
-   One tap runs healthy → bleached. Tap again to recover.
-   ------------------------------------------------------------ */
+/* One tap runs healthy → bleached. Tap again to recover. */
 AFRAME.registerComponent('tap-to-bleach', {
   schema: {
     duration: { type: 'number', default: 3400 }
@@ -63,9 +58,6 @@ AFRAME.registerComponent('tap-to-bleach', {
   }
 });
 
-/* ------------------------------------------------------------
-   UI wiring
-   ------------------------------------------------------------ */
 document.addEventListener('DOMContentLoaded', () => {
   const prompt    = document.getElementById('prompt');
   const hint      = document.getElementById('hint');

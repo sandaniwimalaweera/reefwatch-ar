@@ -47,14 +47,12 @@
       </div>
     </div>
 
-    <!-- Scanning guidance -->
     <div class="ar-scan" id="scan" hidden>
       <div class="ar-scan-ring" aria-hidden="true"></div>
       <p class="ar-scan-title">Looking for a surface</p>
       <p class="ar-scan-copy">Move your phone slowly across the floor.</p>
     </div>
 
-    <!-- Live readout and temperature control -->
     <div class="hud" id="hud" hidden>
       <div class="hud-top">
         <div>
@@ -137,8 +135,9 @@
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
 
-    <a-assets>
+        <a-assets>
       <a-asset-item id="reefModel" src="assets/models/reef.glb"></a-asset-item>
+      <a-asset-item id="coralModel" src="assets/models/coral.glb"></a-asset-item>
     </a-assets>
 
     <!-- In a WebXR session the device supplies the pose. In the sensor
@@ -192,12 +191,27 @@
            because there is no real shadow from the room's light. -->
       <a-entity contact-shadow="radius: 0.85; opacity: 0.5"></a-entity>
 
+            <!-- Reef base: mixed assemblage, average tolerance -->
       <a-entity
         gltf-model="#reefModel"
         fit-model="size: 1.25"
         bleachable
-        temperature-driven>
+        temperature-driven="safe: 29.0; fatal: 31.5">
       </a-entity>
+
+      <!-- Individual colonies. Each has its own thermal tolerance,
+           so the reef whitens in stages rather than all at once. -->
+      <a-entity position="0.52 0 0.18" rotation="0 20 0"
+        gltf-model="#coralModel" fit-model="size: 0.34"
+        bleachable temperature-driven="safe: 28.8; fatal: 30.6"></a-entity>
+
+      <a-entity position="-0.34 0 0.46" rotation="0 -55 0"
+        gltf-model="#coralModel" fit-model="size: 0.28"
+        bleachable temperature-driven="safe: 29.2; fatal: 31.2"></a-entity>
+
+      <a-entity position="0.05 0 -0.55" rotation="0 130 0"
+        gltf-model="#coralModel" fit-model="size: 0.40"
+        bleachable temperature-driven="safe: 30.0; fatal: 32.4"></a-entity>
       <a-entity reef-school="count: 12; radius: 1.05; coral: 0.45; minHeight: 0.12; maxHeight: 0.85; length: 0.14; speed: 0.34; perception: 0.40; personal: 0.14"></a-entity>
       <a-entity marine-snow="count: 70; spread: 1.8; top: 1.4"></a-entity>
       <a-entity caustic-light="intensity: 0.9"></a-entity>

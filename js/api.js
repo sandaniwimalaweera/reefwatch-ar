@@ -1,13 +1,11 @@
-/* ============================================================
-   ReefWatch AR — live marine data
+/* ReefWatch AR — live marine data
 
    Sea surface temperature from the Open-Meteo Marine API.
    Free, no API key, no sign-up.
 
    Data is licensed CC BY 4.0 and must be credited to Open-Meteo
    and the German Weather Service (DWD). That attribution appears
-   in the app's credits panel, in CREDITS.md and in the report.
-   ============================================================ */
+   in the app's credits panel, in CREDITS.md and in the report. */
 
 (function (global) {
   'use strict';
@@ -41,8 +39,7 @@
   const CACHE_MAX_AGE = 3 * 60 * 60 * 1000;   // three hours
   const TIMEOUT = 8000;
 
-  /* ---------- cache ----------
-     A reading is kept so the app still shows something sensible
+  /* A reading is kept so the app still shows something sensible
      when the network is unavailable — during a demo on a weak
      connection, for instance. */
 
@@ -68,8 +65,6 @@
       /* Non-fatal: the app works fine without a cache. */
     }
   }
-
-  /* ---------- request ---------- */
 
   function buildUrl (site) {
     const params = new URLSearchParams({
@@ -99,8 +94,6 @@
         throw err;
       });
   }
-
-  /* ---------- public API ---------- */
 
   function load (siteKey) {
     const key  = siteKey && SITES[siteKey] ? siteKey : 'pigeon';

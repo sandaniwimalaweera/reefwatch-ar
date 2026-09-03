@@ -1,13 +1,9 @@
-/* ============================================================
-   ReefWatch AR — shared scene library
+/* ReefWatch AR — shared scene library
 
    Components used by both the marker scene and the markerless
-   scene. Loaded before either page's own script.
-   ============================================================ */
+   scene. Loaded before either page's own script. */
 
-/* ------------------------------------------------------------
-   fit-model
-   Source models come in wildly different units — one Sketchfab
+/* Source models come in wildly different units — one Sketchfab
    export may be 0.2 units across, another 400. Hard-coding a
    scale means re-tuning every time the model changes.
 
@@ -26,8 +22,7 @@
    2. Keep measuring for a moment, and re-fit whenever the model
       turns out to be bigger than it first looked. A model whose
       geometry is still arriving measures small, and a first-and-
-      final fit locks that in as a model several times too large.
-   ------------------------------------------------------------ */
+      final fit locks that in as a model several times too large. */
 AFRAME.registerComponent('fit-model', {
   schema: {
     size:   { type: 'number', default: 0.22 },
@@ -131,14 +126,11 @@ AFRAME.registerComponent('fit-model', {
   }
 });
 
-/* ------------------------------------------------------------
-   bleachable
-   Clones every material so we never mutate a shared one, stores
+/* Clones every material so we never mutate a shared one, stores
    the original colour, then blends toward bone white as
    `amount` runs 0 → 1.
 
-   This is why no second white model is needed.
-   ------------------------------------------------------------ */
+   This is why no second white model is needed. */
 AFRAME.registerComponent('bleachable', {
   schema: {
     amount: { type: 'number', default: 0 }
@@ -191,16 +183,13 @@ AFRAME.registerComponent('bleachable', {
   }
 });
 
-/* ------------------------------------------------------------
-   reef-fish
-   A proper fish rather than a sphere on a stick.
+/* A proper fish rather than a sphere on a stick.
 
    Body is a lathe — a profile curve revolved around the long
    axis — which gives the tapered fusiform shape real fish have.
    Flattening it laterally makes it read as a fish from the side.
    Fins are thin cones and triangles. Tail beat, banking and
-   pitch are driven per-frame in tick().
-   ------------------------------------------------------------ */
+   pitch are driven per-frame in tick(). */
 AFRAME.registerComponent('reef-fish', {
   schema: {
     hue:     { type: 'color',  default: '#FFB35C' },
@@ -236,7 +225,6 @@ AFRAME.registerComponent('reef-fish', {
 
     this.materials = [skin, finSkin];
 
-    /* --- body: revolve a tapered profile --- */
     const L = d.length;
     const profile = [];
     const steps = 14;
@@ -255,7 +243,6 @@ AFRAME.registerComponent('reef-fish', {
     body.scale.set(1, 1, 0.62);      // flatten laterally
     group.add(body);
 
-    /* --- caudal fin (tail) --- */
     const tailShape = new THREE.Shape();
     tailShape.moveTo(0, 0);
     tailShape.lineTo(-L * 0.34, L * 0.26);
@@ -271,7 +258,6 @@ AFRAME.registerComponent('reef-fish', {
     this.tail.add(tail);
     group.add(this.tail);
 
-    /* --- dorsal fin --- */
     const dorsalShape = new THREE.Shape();
     dorsalShape.moveTo(L * 0.18, 0);
     dorsalShape.lineTo(-L * 0.01, L * 0.26);
@@ -280,7 +266,6 @@ AFRAME.registerComponent('reef-fish', {
     dorsal.position.y = L * 0.08;
     group.add(dorsal);
 
-    /* --- anal fin, smaller and underneath --- */
     const analShape = new THREE.Shape();
     analShape.moveTo(-L * 0.06, 0);
     analShape.lineTo(-L * 0.16, -L * 0.13);
@@ -289,7 +274,6 @@ AFRAME.registerComponent('reef-fish', {
     anal.position.y = -L * 0.07;
     group.add(anal);
 
-    /* --- pectoral fins --- */
     const pecShape = new THREE.Shape();
     pecShape.moveTo(0, 0);
     pecShape.lineTo(-L * 0.14, L * 0.05);
@@ -303,7 +287,6 @@ AFRAME.registerComponent('reef-fish', {
       group.add(pec);
     });
 
-    /* --- eye --- */
     const eyeGeo   = new THREE.SphereGeometry(L * 0.055, 10, 10);
     const eyeMat   = new THREE.MeshStandardMaterial({ color: 0x101c26, roughness: 0.15, metalness: 0.3 });
     const pupilGeo = new THREE.SphereGeometry(L * 0.024, 8, 8);
@@ -365,11 +348,8 @@ AFRAME.registerComponent('reef-fish', {
   }
 });
 
-/* ------------------------------------------------------------
-   marine-snow
-   Slow drifting particulate. Sells "underwater" more cheaply
-   than any amount of extra geometry.
-   ------------------------------------------------------------ */
+/* Slow drifting particulate. Sells "underwater" more cheaply
+   than any amount of extra geometry. */
 AFRAME.registerComponent('marine-snow', {
   schema: {
     count:  { type: 'number', default: 90 },
@@ -427,12 +407,9 @@ AFRAME.registerComponent('marine-snow', {
   }
 });
 
-/* ------------------------------------------------------------
-   caustics
-   Sunlight breaking on the surface, projected down onto the
+/* Sunlight breaking on the surface, projected down onto the
    scene. A slowly animated pattern on a spotlight is enough to
-   suggest water above without rendering any.
-   ------------------------------------------------------------ */
+   suggest water above without rendering any. */
 AFRAME.registerComponent('caustic-light', {
   schema: {
     intensity: { type: 'number', default: 1.1 }
@@ -456,18 +433,14 @@ AFRAME.registerComponent('caustic-light', {
   }
 });
 
-/* ------------------------------------------------------------
-   contact-shadow
-
-   A soft dark ellipse on the ground beneath an object. Real
+/* A soft dark ellipse on the ground beneath an object. Real
    shadow mapping cannot help here — there is no virtual light
    matching the room's actual lighting — but the eye reads any
    dark patch under an object as contact. Without it, placed
    models appear to hover.
 
    The gradient is drawn once into a canvas and used as an alpha
-   map, so it costs one texture and two triangles.
-   ------------------------------------------------------------ */
+   map, so it costs one texture and two triangles. */
 AFRAME.registerComponent('contact-shadow', {
   schema: {
     radius:  { type: 'number', default: 0.8 },
@@ -531,12 +504,9 @@ AFRAME.registerComponent('contact-shadow', {
   }
 });
 
-/* ------------------------------------------------------------
-   buildFish
-   The mesh construction from reef-fish, pulled out so the school
+/* The mesh construction from reef-fish, pulled out so the school
    can stamp out many bodies without duplicating the geometry code.
-   Returns the group plus the parts that need animating.
-   ------------------------------------------------------------ */
+   Returns the group plus the parts that need animating. */
 function buildFish (L, hue) {
   const group = new THREE.Group();
 
@@ -557,7 +527,6 @@ function buildFish (L, hue) {
     side: THREE.DoubleSide
   });
 
-  /* --- body: revolve a tapered profile --- */
   const profile = [];
   const steps = 14;
   for (let i = 0; i <= steps; i++) {
@@ -572,7 +541,6 @@ function buildFish (L, hue) {
   body.scale.set(1, 1, 0.62);
   group.add(body);
 
-  /* --- caudal fin --- */
   const tailShape = new THREE.Shape();
   tailShape.moveTo(0, 0);
   tailShape.lineTo(-L * 0.34, L * 0.26);
@@ -587,7 +555,6 @@ function buildFish (L, hue) {
   tailPivot.add(tailMesh);
   group.add(tailPivot);
 
-  /* --- dorsal --- */
   const dorsalShape = new THREE.Shape();
   dorsalShape.moveTo(L * 0.18, 0);
   dorsalShape.lineTo(-L * 0.01, L * 0.26);
@@ -596,7 +563,6 @@ function buildFish (L, hue) {
   dorsal.position.y = L * 0.08;
   group.add(dorsal);
 
-  /* --- anal --- */
   const analShape = new THREE.Shape();
   analShape.moveTo(-L * 0.06, 0);
   analShape.lineTo(-L * 0.16, -L * 0.13);
@@ -605,7 +571,6 @@ function buildFish (L, hue) {
   anal.position.y = -L * 0.07;
   group.add(anal);
 
-  /* --- pectorals --- */
   const pecShape = new THREE.Shape();
   pecShape.moveTo(0, 0);
   pecShape.lineTo(-L * 0.14, L * 0.05);
@@ -621,7 +586,6 @@ function buildFish (L, hue) {
     group.add(pec);
   });
 
-  /* --- eyes --- */
   const eyeGeo   = new THREE.SphereGeometry(L * 0.055, 10, 10);
   const eyeMat   = new THREE.MeshStandardMaterial({ color: 0x101c26, roughness: 0.15, metalness: 0.3 });
   const glintGeo = new THREE.SphereGeometry(L * 0.024, 8, 8);
@@ -642,9 +606,7 @@ function buildFish (L, hue) {
   return { group: group, tail: tailPivot, pecs: pecs, materials: [skin, finSkin] };
 }
 
-/* ------------------------------------------------------------
-   reef-school
-   Boids flocking (Reynolds, 1987). Each fish steers by three
+/* Boids flocking (Reynolds, 1987). Each fish steers by three
    local rules — separation, alignment, cohesion — summed with
    two environmental forces: stay inside the reef volume, and
    don't swim through the coral.
@@ -655,8 +617,7 @@ function buildFish (L, hue) {
 
    Neighbour search is brute force. At this count that is a few
    hundred distance checks per frame, which is cheaper on mobile
-   than maintaining a spatial index.
-   ------------------------------------------------------------ */
+   than maintaining a spatial index. */
 AFRAME.registerComponent('reef-school', {
   schema: {
     count:      { type: 'number', default: 14 },
@@ -780,7 +741,7 @@ AFRAME.registerComponent('reef-school', {
         this._acc.addScaledVector(this._coh, wCoh);
       }
 
-      /* --- wander ---
+      /* wander
          Separation, alignment and cohesion alone reach equilibrium:
          the school settles into a fixed ring and stops looking alive.
          A slow random walk on each fish's heading keeps the system
@@ -790,7 +751,7 @@ AFRAME.registerComponent('reef-school', {
       this._acc.z += Math.sin(b.wander) * 0.40;
       this._acc.y += Math.sin(b.wander * 1.7) * 0.15;
 
-      /* --- stay inside the reef volume --- */
+      /* stay inside the reef volume */
       const hx = b.position.x;
       const hz = b.position.z;
       const horiz = Math.sqrt(hx * hx + hz * hz);
@@ -812,7 +773,6 @@ AFRAME.registerComponent('reef-school', {
       if (b.position.y < lowY)  this._acc.y += (lowY - b.position.y) * 7;
       if (b.position.y > highY) this._acc.y -= (b.position.y - highY) * 7;
 
-      /* --- don't swim through the coral --- */
       // A vertical cylinder around the model. Fish approaching it are
       // pushed sideways, which is what produces the split-and-rejoin.
       if (horiz < d.coral && horiz > 0.0001) {
@@ -821,7 +781,6 @@ AFRAME.registerComponent('reef-school', {
         this._acc.z += (hz / horiz) * push * 2.6;
       }
 
-      /* --- integrate --- */
       b.velocity.addScaledVector(this._acc, dt);
 
       const target = b.cruise * (1 + s * 1.6);
@@ -846,7 +805,6 @@ AFRAME.registerComponent('reef-school', {
 
       b.group.position.copy(b.position);
 
-      /* --- orientation --- */
       const v = b.velocity;
       const vLen = v.length() || 0.0001;
       const yaw = Math.atan2(-v.z, v.x);
@@ -863,7 +821,7 @@ AFRAME.registerComponent('reef-school', {
       const bank = Math.max(-0.7, Math.min(0.7, -dy * 6));
       b.group.rotation.x += (bank - b.group.rotation.x) * Math.min(1, dt * 6);
 
-      /* --- tail beat, tied to actual speed --- */
+      /* tail beat, tied to actual speed */
       const rate = 12 + (vLen / d.speed) * 8;
       b.beat += dt * rate;
       if (b.tail) b.tail.rotation.y = Math.sin(b.beat) * (0.35 + s * 0.3);
