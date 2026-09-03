@@ -394,6 +394,7 @@ AFRAME.registerComponent('sensor-ar', {
     // Last raw reading, kept only so the debug panel can show it.
     this.raw = { alpha: 0, beta: 0, gamma: 0, screen: 0 };
     this.fov = 0;
+    this.suspended = false;   // camera lent to Quick Look
 
     /* DeviceOrientation describes the screen's frame. The camera
        looks out of the back of the phone, which is that frame
@@ -477,6 +478,45 @@ AFRAME.registerComponent('sensor-ar', {
     camEl.removeAttribute('look-controls');
     camEl.object3D.position.set(0, this.data.eyeHeight, 0);
     this.onResize();
+  },
+
+  /* The camera, lent out and taken back.
+
+     Quick Look is ARKit in a separate process, and iOS gives the
+     camera to one client at a time. While this page still holds a
+     getUserMedia stream ARKit cannot open a session of its own, so
+     the viewer falls back to its turntable and greys out the AR
+     tab — the reef appears, but only as an object.
+
+     Pausing the video element is not enough; the browser keeps the
+     capture session open behind it. The track itself has to end. */
+  suspendCamera: function () {
+    if (!this.stream) return false;
+
+    this.stream.getTracks().forEach((t) => t.stop());
+    this.stream = null;
+    if (this.video) this.video.pause();
+    this.suspended = true;
+    return true;
+  },
+
+  resumeCamera: function () {
+    if (!this.suspended) return Promise.resolve(false);
+
+    return navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false
+    }).then((stream) => {
+      this.suspended = false;
+      this.stream = stream;
+      if (!this.video) return false;
+
+      this.video.srcObject = stream;
+      return this.video.play().then(() => {
+        this.onResize();
+        return true;
+      });
+    });
   },
 
   releaseCamera: function () {
@@ -1045,13 +1085,69 @@ document.addEventListener('DOMContentLoaded', () => {
   const arkitOpen  = document.getElementById('arkitOpen');
   const arkitNote  = document.getElementById('arkitNote');
 
+  /* The hand-off has to give the camera up first. Quick Look opens
+     either way, but with the page still capturing it can only show
+     the reef on a turntable: its AR tab is greyed out, because
+     ARKit could not start a session. Same for a live WebXR session,
+     which owns the camera just as completely. */
+  let cameraLent = false;
+
+  const lendCamera = () => {
+    const comp = sensor.components['sensor-ar'];
+    if (comp && comp.suspendCamera && comp.suspendCamera()) cameraLent = true;
+
+    if (mode === 'webxr' && scene.is('ar-mode') &&
+        typeof scene.exitVR === 'function') {
+      scene.exitVR();
+      cameraLent = true;
+    }
+  };
+
+  const reclaimCamera = () => {
+    if (!cameraLent) return;
+    cameraLent = false;
+
+    const comp = sensor.components['sensor-ar'];
+    if (!comp || !comp.resumeCamera) return;
+
+    /* Permission is already granted, so this normally resolves with
+       no prompt and no gesture. If the browser insists on one
+       anyway, ask for it rather than leaving a black screen. */
+    comp.resumeCamera().catch(() => {
+      say('Camera paused', 'Tap anywhere to start the camera again.');
+      document.addEventListener('pointerdown', function retry () {
+        comp.resumeCamera().catch(() => {});
+      }, { once: true });
+    });
+  };
+
   const openARKit = () => {
-    if (window.ReefARKit && window.ReefARKit.launch()) return;
+    lendCamera();
+
+    if (window.ReefARKit && window.ReefARKit.launch()) {
+      /* If the viewer never actually came up the page is still
+         visible, and the camera has been surrendered for nothing —
+         which would leave the reef frozen on a dead feed. */
+      setTimeout(() => {
+        if (document.visibilityState === 'visible') reclaimCamera();
+      }, 2500);
+      return;
+    }
+
+    // Nothing opened, so take the camera straight back.
+    reclaimCamera();
+
     const why = (window.ReefARKit && window.ReefARKit.reason) ||
                 'Native AR is not available on this device.';
     arkitNote.textContent = why;
     arkitNote.classList.add('is-shown');
   };
+
+  /* Quick Look is a full-screen takeover: the page is hidden for as
+     long as it is open, and visible again the moment it closes. */
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') reclaimCamera();
+  });
 
   arkitStart.addEventListener('click', openARKit);
   arkitOpen.addEventListener('click', openARKit);
