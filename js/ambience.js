@@ -31,8 +31,14 @@
 
   /* Whether the bed is wanted survives a page change, so the
      ambience carries across the landing page and both scenes
-     instead of restarting from silence each time. */
-  var KEY = 'reefwatch:ambience';
+     instead of restarting from silence each time.
+
+     The key is versioned: the previous one collected a lot of
+     spurious "off" values, because a first tap on the speaker used
+     to both arm the bed and then immediately toggle it back off.
+     Those readers had silence saved for them and never asked for
+     it, so v2 starts them from the default again. */
+  var KEY = 'reefwatch:ambience:v2';
 
   function readPref () {
     try { return global.localStorage.getItem(KEY) !== 'off'; }
@@ -406,6 +412,18 @@
     tick.start(now, Math.random() * (this.noiseBuf.duration - 0.2), 0.05);
   };
 
+  /* The button has to show whether the bed is *audible*, not just
+     whether it is wanted, and the bed can become audible without
+     the button being touched — the first tap anywhere on the page
+     starts it. Broadcast the change so the button can repaint. */
+  ReefAudio.prototype._announce = function () {
+    try {
+      global.dispatchEvent(new CustomEvent('reef-audio-state', {
+        detail: { wanted: this.wanted, running: this.running }
+      }));
+    } catch (err) { /* the button still repaints on its own taps */ }
+  };
+
   ReefAudio.prototype.start = function () {
     if (!this._ensure()) return Promise.reject(new Error('Web Audio not supported'));
 
@@ -434,6 +452,8 @@
 
     this.setHealth(this.health);
 
+    this._announce();
+
     // Resuming a running context is a no-op; iOS can suspend one
     // immediately after creation even inside a gesture.
     return ctx.resume().catch(function () {});
@@ -449,6 +469,7 @@
     this.bed.gain.cancelScheduledValues(t);
     this.bed.gain.setValueAtTime(this.bed.gain.value, t);
     this.bed.gain.linearRampToValueAtTime(0, t + 0.5);
+    this._announce();
     // The context stays open: the interface still has to make a sound.
   };
 
@@ -480,31 +501,59 @@
   global.ReefAudio = audio;
   global.ReefAmbience = audio;      // the name the scenes already use
 
-  /* Autoplay is blocked without a gesture, so the bed cannot
-     simply start on load. It arms instead: the first touch
-     anywhere on the page starts it, and the preference is
-     remembered, so it carries from the landing page into a scene
-     without ever asking again. */
+  /* The bed is on by default. Where the browser will allow sound
+     on load it starts there; where autoplay is blocked it arms
+     instead, and the first touch anywhere on the page starts it.
+     Either way the preference is remembered, so it carries from
+     the landing page into a scene without ever asking again. */
   function arm () {
     var events = ['pointerdown', 'touchstart', 'keydown'];
 
-    var go = function () {
+    var go = function (ev) {
+      /* A gesture that lands on the audio button belongs to that
+         button. Starting here would turn the very tap meant to
+         unmute the page into a mute, which is how a session ends up
+         silent and — the preference being remembered — stays that
+         way. Leave the arming in place: the button's own handler
+         takes this one. */
+      if (ev && ev.target && ev.target.closest && ev.target.closest('#audio')) {
+        audio._ensure();
+        return;
+      }
+
       events.forEach(function (n) { document.removeEventListener(n, go, true); });
       audio._ensure();
-      if (audio.wanted) audio.start().catch(function () {});
+      if (audio.wanted && !audio.running) audio.start().catch(function () {});
     };
 
     events.forEach(function (n) { document.addEventListener(n, go, true); });
 
+    if (!audio.wanted) return;
+
     /* A page that has already been touched — a reload, or a browser
        that grants this site autoplay from past engagement — can
-       start straight away. A fresh load cannot, and asking anyway
-       would build the whole graph during A-Frame's boot only to be
-       refused, so it waits for the gesture above instead. */
+       start straight away. */
     var activation = global.navigator.userActivation;
-    if (audio.wanted && activation && activation.hasBeenActive) {
+    if (activation && activation.hasBeenActive) {
       audio.start().catch(function () {});
+      return;
     }
+
+    /* Otherwise ask the browser directly whether it would allow
+       sound: a context handed back already `running` needs no
+       gesture, and the bed can fade in on load the way it should.
+       One that comes back `suspended` is autoplay-blocked, so the
+       graph is thrown no further work and the tap handler above
+       takes over. Deferred past load so it never competes with
+       A-Frame's boot for the main thread. */
+    var probe = function () {
+      if (audio.running || !audio.wanted) return;
+      if (!audio._ensure()) return;
+      if (audio.ctx.state === 'running') audio.start().catch(function () {});
+    };
+
+    if (document.readyState === 'complete') setTimeout(probe, 0);
+    else global.addEventListener('load', function () { setTimeout(probe, 0); });
   }
 
   /* Delegated rather than bound per button, so a control a scene
@@ -534,16 +583,28 @@
     var btn = document.getElementById('audio');
     if (!btn) return;
 
+    /* Wanted but not yet running is the autoplay-blocked state: the
+       page is silent, so the button says silent. */
     var paint = function () {
-      btn.classList.toggle('is-on', audio.wanted);
-      btn.setAttribute('aria-label', audio.wanted ? 'Mute ambience' : 'Play ambience');
-      btn.setAttribute('aria-pressed', String(audio.wanted));
+      var on = audio.wanted && audio.running;
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-label', on ? 'Mute ambience' : 'Play ambience');
+      btn.setAttribute('aria-pressed', String(on));
     };
     paint();
+    global.addEventListener('reef-audio-state', paint);
 
     btn.addEventListener('click', function (ev) {
       ev.stopPropagation();       // must not also place the reef
-      audio.toggle().then(function (on) {
+
+      /* Silent because the browser has not allowed sound yet, not
+         because the reader asked for silence: this tap is the
+         permission, so start rather than toggle. */
+      var act = (audio.wanted && !audio.running)
+        ? audio.start().then(function () { return true; })
+        : audio.toggle();
+
+      act.then(function (on) {
         audio.sfx(on ? 'on' : 'off');
         paint();
       }).catch(function () {
