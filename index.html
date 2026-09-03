@@ -48,6 +48,35 @@
     </svg>
   </button>
 
+  <!-- Sound on arrival.
+       Every mobile browser refuses to play audio until the page has
+       been touched once, so the reef cannot simply fade in on load.
+       Rather than leave the reader to discover the speaker button,
+       this asks for that one touch up front and spends it on the
+       ambience — the dive starts with the water already audible.
+
+       It is revealed by ambience.js, and only when the browser has
+       actually refused: where autoplay is permitted the bed is
+       already playing by the time this would appear, and the reader
+       never sees it. -->
+  <div class="sound-gate" id="soundGate" role="dialog" aria-modal="true"
+       aria-labelledby="soundGateTitle" hidden>
+    <div class="sound-gate-inner">
+      <p class="sound-gate-eyebrow">Pigeon Island &middot; 8 m down</p>
+      <h2 class="sound-gate-title" id="soundGateTitle">Tap to dive in</h2>
+      <p class="sound-gate-copy">
+        This reef has a soundscape &mdash; surge, bubbles, and the crackle of
+        snapping shrimp, which is what a living reef actually sounds like.
+        Your browser needs one tap before it will play it.
+      </p>
+      <button class="sound-gate-go" id="soundGateGo" type="button"
+              data-sfx="open">Enter with sound</button>
+      <button class="sound-gate-skip" id="soundGateSkip" type="button">
+        Continue in silence
+      </button>
+    </div>
+  </div>
+
   <main class="shell">
 
     <header class="masthead">

@@ -59,16 +59,18 @@
     this.lastSfx = 0;
   }
 
-  ReefAudio.prototype._ensure = function () {
-    if (this.built) return true;
+  /* The context on its own, without the graph hanging off it. That
+     is enough to read the browser's autoplay verdict — a context
+     handed back `running` needs no gesture — and the verdict decides
+     whether building the rest on load is worth the main thread. */
+  ReefAudio.prototype._context = function () {
+    if (this.ctx) return this.ctx;
 
     var AudioCtx = global.AudioContext || global.webkitAudioContext;
-    if (!AudioCtx) return false;
+    if (!AudioCtx) return null;
 
     try { this.ctx = new AudioCtx(); }
-    catch (err) { return false; }
-
-    var ctx = this.ctx;
+    catch (err) { return null; }
 
     /* iOS routes Web Audio through the "ambient" session, which the
        hardware silent switch mutes. Declaring playback intent moves
@@ -78,6 +80,15 @@
         global.navigator.audioSession.type = 'playback';
       }
     } catch (err) { /* audio still plays with the switch off */ }
+
+    return this.ctx;
+  };
+
+  ReefAudio.prototype._ensure = function () {
+    if (this.built) return true;
+    if (!this._context()) return false;
+
+    var ctx = this.ctx;
 
     /* A limiter on the end. Bubbles and taps are transients on top
        of a continuous bed, and without one a tap during a swell
@@ -516,7 +527,8 @@
          silent and — the preference being remembered — stays that
          way. Leave the arming in place: the button's own handler
          takes this one. */
-      if (ev && ev.target && ev.target.closest && ev.target.closest('#audio')) {
+      if (ev && ev.target && ev.target.closest &&
+          ev.target.closest('#audio, #soundGate:not([hidden])')) {
         audio._ensure();
         return;
       }
@@ -530,30 +542,127 @@
 
     if (!audio.wanted) return;
 
-    /* A page that has already been touched — a reload, or a browser
-       that grants this site autoplay from past engagement — can
-       start straight away. */
-    var activation = global.navigator.userActivation;
-    if (activation && activation.hasBeenActive) {
-      audio.start().catch(function () {});
-      return;
-    }
+    /* Try to have sound on load, and where that is impossible, ask
+       for it. Deferred past load so building the graph never
+       competes with A-Frame's boot for the main thread.
 
-    /* Otherwise ask the browser directly whether it would allow
-       sound: a context handed back already `running` needs no
-       gesture, and the bed can fade in on load the way it should.
-       One that comes back `suspended` is autoplay-blocked, so the
-       graph is thrown no further work and the tap handler above
-       takes over. Deferred past load so it never competes with
-       A-Frame's boot for the main thread. */
-    var probe = function () {
+       Two ways the browser will allow it without a tap: a context
+       handed back already `running` (desktop Chrome that has heard
+       this site before, or any browser given autoplay permission),
+       or a document that already carries user activation. */
+    var attempt = function () {
       if (audio.running || !audio.wanted) return;
+
+      var ctx = audio._context();
+      if (!ctx) return;                  // no Web Audio: nothing to offer
+
+      var activation = global.navigator.userActivation;
+      var allowed = ctx.state === 'running' ||
+                    (activation && activation.hasBeenActive);
+
+      /* Blocked. Build nothing — the gate's tap, or the first touch
+         anywhere, will build it — and ask for the gesture instead. */
+      if (!allowed) {
+        showGate();
+        return;
+      }
+
       if (!audio._ensure()) return;
-      if (audio.ctx.state === 'running') audio.start().catch(function () {});
+      audio.start().catch(function () {});
+
+      /* resume() settles asynchronously and can still be refused,
+         which would leave the button lit over a silent page. Check
+         what actually happened, and fall back to asking. */
+      setTimeout(function () {
+        if (!audio.wanted || audio.ctx.state === 'running') return;
+        audio.stop();
+        showGate();
+      }, 500);
     };
 
-    if (document.readyState === 'complete') setTimeout(probe, 0);
-    else global.addEventListener('load', function () { setTimeout(probe, 0); });
+    if (document.readyState === 'complete') setTimeout(attempt, 0);
+    else global.addEventListener('load', function () { setTimeout(attempt, 0); });
+  }
+
+  /* A page can offer a veil to be shown when — and only when — the
+     browser has refused to start the bed on load. It converts the
+     gesture the autoplay policy demands into the act of entering,
+     so the reader arrives with the water audible rather than having
+     to find the speaker button. A page without one (both AR scenes
+     already open on a Start gate, which does the same job) simply
+     has nothing to reveal.
+
+     Shown once a session: on a second load the reader already knows
+     the site has sound, and the first touch anywhere starts it. */
+  var SEEN = 'reefwatch:sound-gate-seen';
+
+  function seenGate () {
+    try { return global.sessionStorage.getItem(SEEN) === 'yes'; }
+    catch (err) { return false; }
+  }
+
+  function markGateSeen () {
+    try { global.sessionStorage.setItem(SEEN, 'yes'); }
+    catch (err) { /* it just shows again, which is not a failure */ }
+  }
+
+  function showGate () {
+    var gate = document.getElementById('soundGate');
+    if (!gate || seenGate()) return;
+
+    var go   = document.getElementById('soundGateGo');
+    var skip = document.getElementById('soundGateSkip');
+    var done = false;
+
+    var dismiss = function () {
+      if (done) return;
+      done = true;
+      markGateSeen();
+      gate.classList.add('is-gone');
+      /* Taken out of the tree once it has faded, so it can never
+         swallow a tap meant for a mode card. */
+      setTimeout(function () { gate.hidden = true; }, 450);
+    };
+
+    /* Any tap on the veil enters — the whole thing is the button,
+       and the labelled one inside it is for anyone who needs a
+       real target. */
+    var enter = function (ev) {
+      if (skip && ev && ev.target === skip) return;
+      audio.wanted = true;
+      writePref(true);
+      audio.start().catch(function () {});
+      dismiss();
+    };
+
+    // One listener: a click on the button inside bubbles to here.
+    gate.addEventListener('click', enter);
+
+    if (skip) {
+      skip.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        audio.wanted = false;
+        writePref(false);
+        audio._announce();
+        dismiss();
+      });
+    }
+
+    /* Escape is the expected way out of a dialog. Enter and Space
+       reach the focused button on their own, and Tab has to stay a
+       Tab so the two choices can be moved between. */
+    var onKey = function (ev) {
+      if (ev.key !== 'Escape') return;
+      document.removeEventListener('keydown', onKey, true);
+      audio.wanted = false;
+      writePref(false);
+      audio._announce();
+      dismiss();
+    };
+    document.addEventListener('keydown', onKey, true);
+
+    gate.hidden = false;
+    if (go) go.focus();
   }
 
   /* Delegated rather than bound per button, so a control a scene
