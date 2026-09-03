@@ -33,12 +33,15 @@
      ambience carries across the landing page and both scenes
      instead of restarting from silence each time.
 
-     The key is versioned: the previous one collected a lot of
-     spurious "off" values, because a first tap on the speaker used
-     to both arm the bed and then immediately toggle it back off.
-     Those readers had silence saved for them and never asked for
-     it, so v2 starts them from the default again. */
-  var KEY = 'reefwatch:ambience:v2';
+     The key is versioned, because it has twice been written to by
+     something that had no business saving a preference: a first tap
+     on the speaker used to arm the bed and then immediately toggle
+     it back off, and closing the sound prompt used to save silence
+     when it meant only "not now". Both left readers muted who never
+     asked to be, and a saved "off" suppresses the prompt as well as
+     the sound, so it never came back. v3 starts them from the
+     default again. */
+  var KEY = 'reefwatch:ambience:v3';
 
   function readPref () {
     try { return global.localStorage.getItem(KEY) !== 'off'; }
@@ -517,6 +520,11 @@
      instead, and the first touch anywhere on the page starts it.
      Either way the preference is remembered, so it carries from
      the landing page into a scene without ever asking again. */
+  /* Replaced by arm(). Lets the prompt's close button silence this
+     one page load without touching the saved preference — closing a
+     popup means "not now", not "never again". */
+  var disarm = function () {};
+
   function arm () {
     var events = ['pointerdown', 'mousedown', 'touchstart', 'keydown', 'click'];
 
@@ -540,12 +548,27 @@
 
     events.forEach(function (n) { document.addEventListener(n, go, true); });
 
-    if (!audio.wanted) return;
+    disarm = function () {
+      events.forEach(function (n) { document.removeEventListener(n, go, true); });
+    };
 
-    /* Start on load wherever the browser allows it. Deferred past
-       load so building the graph never competes with A-Frame's boot
-       for the main thread.
+    /* Deferred past load so building the graph never competes with
+       A-Frame's boot for the main thread. */
+    var onLoad = function (fn) {
+      if (document.readyState === 'complete') setTimeout(fn, 0);
+      else global.addEventListener('load', function () { setTimeout(fn, 0); });
+    };
 
+    /* Muted from the speaker on an earlier visit. Nothing is going
+       to start on its own, so go straight to offering it: the
+       prompt is how the sound comes back without having to find
+       that control again. */
+    if (!audio.wanted) {
+      onLoad(showPrompt);
+      return;
+    }
+
+    /* Start on load wherever the browser allows it.
        Two ways the browser will allow it without a tap: a context
        handed back already `running` (desktop Chrome that has heard
        this site before, or any browser given autoplay permission),
@@ -557,31 +580,34 @@
       if (!ctx) return;                  // no Web Audio on this device
 
       var activation = global.navigator.userActivation;
-      var allowed = ctx.state === 'running' ||
+      var mayWork = ctx.state === 'running' ||
                     (activation && activation.hasBeenActive);
 
-      /* Refused. Build nothing — the first touch anywhere on the
-         page will build it and start the bed — and say why the reef
-         is quiet in the meantime. */
-      if (!allowed) {
+      /* Refused outright. Build nothing — the first touch anywhere
+         on the page will build it and start the bed — and say why
+         the reef is quiet in the meantime. */
+      if (!mayWork) {
         showPrompt();
         return;
       }
 
-      if (!audio._ensure()) return;
+      if (!audio._ensure()) { showPrompt(); return; }
       audio.start().catch(function () {});
 
-      /* resume() settles asynchronously and can still be refused,
-         which would leave the button lit over a silent page. Put it
-         back to silent, and let the first touch start it. */
+      /* Predicting the verdict is not the same as getting it:
+         resume() settles asynchronously and can still be refused,
+         which used to leave a silent page with nothing said about
+         it. Check what actually came out, and ask if the answer is
+         nothing. */
       setTimeout(function () {
-        if (!audio.wanted || audio.ctx.state === 'running') return;
+        if (!audio.wanted) return;
+        if (audio.running && audio.ctx.state === 'running') return;
         audio.stop();
+        showPrompt();
       }, 500);
     };
 
-    if (document.readyState === 'complete') setTimeout(attempt, 0);
-    else global.addEventListener('load', function () { setTimeout(attempt, 0); });
+    onLoad(attempt);
   }
 
   /* A page may offer a prompt to show when — and only when — the
@@ -594,21 +620,17 @@
      (both AR scenes open on a Start gate, which already collects a
      tap) simply has nothing to show.
 
-     Once a session — on a second load the reader knows the site has
-     sound and does not need telling again. */
-  var TOLD = 'reefwatch:sound-prompt-shown';
-
-  function alreadyTold () {
-    try { return global.sessionStorage.getItem(TOLD) === 'yes'; }
-    catch (err) { return false; }
-  }
+     Shown on every load that starts silent, because every one of
+     those loads needs the tap again — the autoplay policy carries
+     no permission forward, so neither does this. Only muting from
+     the speaker button stops it: that is a lasting choice, and the
+     silent preference it saves never reaches this branch. */
+  var prompted = false;
 
   function showPrompt () {
     var pop = document.getElementById('soundPop');
-    if (!pop || alreadyTold()) return;
-
-    try { global.sessionStorage.setItem(TOLD, 'yes'); }
-    catch (err) { /* it shows again next load, which is no failure */ }
+    if (!pop || prompted) return;
+    prompted = true;
 
     var go    = document.getElementById('soundPopGo');
     var close = document.getElementById('soundPopClose');
@@ -640,14 +662,14 @@
       });
     }
 
-    /* The X is a real answer, not just a way to hide the message:
-       closing it means silence, and the speaker button goes to its
-       off state to say so. Sound is one tap of that button away. */
+    /* The X means "not now", and only now: this page load stays
+       silent — the arming stands down, so a later stray click does
+       not start the bed behind the reader's back — but nothing is
+       written down, so a refresh asks again. Muting for good is
+       what the speaker button is for. */
     if (close) {
       close.addEventListener('click', function () {
-        audio.wanted = false;
-        writePref(false);
-        audio._announce();
+        disarm();
         dismiss();
       });
     }
