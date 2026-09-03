@@ -288,7 +288,7 @@ AFRAME.registerComponent('reef-fish', {
     });
 
     const eyeGeo   = new THREE.SphereGeometry(L * 0.055, 10, 10);
-    const eyeMat   = new THREE.MeshStandardMaterial({ color: 0x101c26, roughness: 0.15, metalness: 0.3 });
+    const eyeMat   = new THREE.MeshStandardMaterial({ color: 0x101c26, roughness: 0.15, metalness: 0.0 });
     const pupilGeo = new THREE.SphereGeometry(L * 0.024, 8, 8);
     const pupilMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     [1, -1].forEach((side) => {
@@ -510,18 +510,35 @@ AFRAME.registerComponent('contact-shadow', {
 function buildFish (L, hue) {
   const group = new THREE.Group();
 
+  /* metalness stays at zero deliberately.
+
+     A metallic surface in a physically based renderer takes its
+     colour from what it reflects, and this scene has no environment
+     map to reflect — the background is a live camera feed, which the
+     renderer knows nothing about. Any metalness above zero therefore
+     mixes in black rather than a reflection, and the fish come out
+     darker and duller than the palette says they are. The corals are
+     exported at metallicFactor 0 for the same reason.
+
+     Gloss comes from low roughness instead, which needs no
+     environment: it sharpens the highlight from the lights that are
+     actually in the scene. */
   const skin = new THREE.MeshStandardMaterial({
     color: new THREE.Color(hue),
     roughness: 0.34,
-    metalness: 0.18,
-    transparent: true,
+    metalness: 0.0,
+
+    /* Opaque until something fades it. setScatter turns blending on
+       only while a fish is actually fading out; see the note there. */
+    transparent: false,
     opacity: 1
   });
 
+  // Fins are thin membranes, so these stay genuinely translucent.
   const finSkin = new THREE.MeshStandardMaterial({
     color: new THREE.Color(hue),
     roughness: 0.5,
-    metalness: 0.05,
+    metalness: 0.0,
     transparent: true,
     opacity: 0.72,
     side: THREE.DoubleSide
@@ -587,7 +604,7 @@ function buildFish (L, hue) {
   });
 
   const eyeGeo   = new THREE.SphereGeometry(L * 0.055, 10, 10);
-  const eyeMat   = new THREE.MeshStandardMaterial({ color: 0x101c26, roughness: 0.15, metalness: 0.3 });
+  const eyeMat   = new THREE.MeshStandardMaterial({ color: 0x101c26, roughness: 0.15, metalness: 0.0 });
   const glintGeo = new THREE.SphereGeometry(L * 0.024, 8, 8);
   const glintMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
   [1, -1].forEach((side) => {
@@ -604,6 +621,54 @@ function buildFish (L, hue) {
   group.rotation.order = 'YZX';
 
   return { group: group, tail: tailPivot, pecs: pecs, materials: [skin, finSkin] };
+}
+
+/* Clone a rigged model so each copy gets its own skeleton.
+
+   THREE.Object3D.clone() copies the meshes but leaves every clone
+   pointing at the original's skeleton, so a school of twelve fish
+   would deform as one: the same bones, the same pose, twelve times.
+   The fix is to clone the skeleton too and re-point its bone array
+   at the cloned bones, which is what three.js ships as
+   SkeletonUtils.clone in its examples.
+
+   A-Frame 1.5.0 does not bundle those examples — THREE.SkeletonUtils
+   is undefined — and pulling in a loose copy risks it being built
+   against a different three.js than the one A-Frame carries. The
+   algorithm is short and stable, so it is reproduced here instead.
+   If a future A-Frame does ship it, applyModel prefers theirs. */
+function cloneRigged (source) {
+  const toSource = new Map();
+  const toClone  = new Map();
+  const copy = source.clone(true);
+
+  // Walk both trees together. clone(true) preserves child order, so
+  // the two traversals stay in step and each clone can be paired
+  // with the node it came from.
+  (function pair (a, b) {
+    toSource.set(b, a);
+    toClone.set(a, b);
+    for (let i = 0; i < a.children.length; i++) {
+      if (b.children[i]) pair(a.children[i], b.children[i]);
+    }
+  })(source, copy);
+
+  copy.traverse((node) => {
+    if (!node.isSkinnedMesh) return;
+
+    const origin = toSource.get(node);
+    if (!origin || !origin.skeleton) return;
+
+    const skeleton = origin.skeleton.clone();
+    // Re-point the cloned skeleton at this copy's own bones. Without
+    // this the bones are still the original's and nothing changes.
+    skeleton.bones = origin.skeleton.bones.map((bone) => toClone.get(bone) || bone);
+
+    node.bindMatrix.copy(origin.bindMatrix);
+    node.bind(skeleton, node.bindMatrix);
+  });
+
+  return copy;
 }
 
 /* Boids flocking (Reynolds, 1987). Each fish steers by three
@@ -629,7 +694,42 @@ AFRAME.registerComponent('reef-school', {
     perception: { type: 'number', default: 0.16 },  // neighbour radius
     personal:   { type: 'number', default: 0.055 }, // separation radius
     coral:      { type: 'number', default: 0.13 },  // keep-out cylinder
-    palette:    { type: 'string', default: '#FFB35C,#6FE3D0,#FF8FA8,#FFE066,#8FB8FF' }
+    palette:    { type: 'string', default: '#FFB35C,#6FE3D0,#FF8FA8,#FFE066,#8FB8FF' },
+
+    /* Optional glTF fish: a comma-separated list of URLs, or `#id`
+       of an <a-asset-item>. Left empty, every fish is built by
+       buildFish from primitives, which is the default: it loads
+       nothing, it costs a few hundred triangles a fish, and it is
+       what the report describes.
+
+       A list rather than one model because the procedural school
+       cycles five colours from `palette`, so it already reads as a
+       mixed reef. A single model would replace that with twelve
+       identical fish, which looks worse than what it replaced.
+       Species are dealt round-robin across the school, so three
+       models give four of each in a school of twelve.
+
+       Each is loaded after the school is already swimming and
+       swapped in when it arrives, so a slow or failed download
+       costs that species and nothing else — the fish still waiting
+       on it keep their procedural bodies. */
+    model:         { type: 'string',  default: '' },
+
+    /* Degrees, applied to the model inside each fish. tick() steers
+       by `Math.atan2(-v.z, v.x)`, so a fish's nose must point +X.
+       Almost nothing is exported that way - a model facing -Z needs
+       `modelRotation: 0 -90 0`. Wrong values are obvious on screen:
+       the school swims sideways or backwards.
+
+       One value applies to every model in the list. Models from a
+       single pack face the same way, so this is usually right;
+       mixing sources means rotating the odd one out before
+       exporting it. */
+    modelRotation: { type: 'vec3',    default: { x: 0, y: 0, z: 0 } },
+
+    /* Play the model's own first animation clip, if it has one, in
+       place of the procedural tail beat. */
+    modelAnimate:  { type: 'boolean', default: true }
   },
 
   init: function () {
@@ -644,6 +744,17 @@ AFRAME.registerComponent('reef-school', {
       // Size varies a little so the school doesn't look stamped.
       const L = d.length * (0.75 + Math.random() * 0.5);
       const fish = buildFish(L, hues[i % hues.length]);
+
+      // Kept so a model swapped in later can be sized to the same
+      // body length this fish was built at.
+      fish.L = L;
+
+      /* Each material's own opacity, so the bleaching fade scales
+         what the material already had rather than overwriting it.
+         For the procedural fish that is 1 for the body and 0.72 for
+         the fins; for a model it is whatever the artist exported. */
+      fish.matFade = fish.materials.map((m) => m.opacity);
+      fish.mixer = null;
 
       const angle = Math.random() * Math.PI * 2;
       const dist  = d.coral + Math.random() * (d.radius - d.coral);
@@ -679,6 +790,193 @@ AFRAME.registerComponent('reef-school', {
     this._coh = new THREE.Vector3();
     this._acc = new THREE.Vector3();
     this._tmp = new THREE.Vector3();
+
+    this.loadModel();
+  },
+
+  /* An `#id` refers to an <a-asset-item>, which is how both pages
+     already preload their coral. Anything else is used as a URL. */
+  resolveUrl: function (value) {
+    if (!value) return null;
+    if (value.charAt(0) !== '#') return value;
+
+    const el = document.querySelector(value);
+    if (!el) {
+      console.warn('[reef-school] no asset matching', value);
+      return null;
+    }
+    return el.getAttribute('src') || el.src || null;
+  },
+
+  loadModel: function () {
+    const urls = this.data.model
+      .split(',')
+      .map((v) => this.resolveUrl(v.trim()))
+      .filter(Boolean);
+
+    if (!urls.length) return;
+
+    if (!THREE.GLTFLoader) {
+      console.warn('[reef-school] THREE.GLTFLoader unavailable, keeping procedural fish');
+      return;
+    }
+
+    const loader = new THREE.GLTFLoader();
+
+    /* Each species claims every Nth fish. Doing it by index rather
+       than by load order keeps the mix stable whichever file wins
+       the download race, and lets a species that fails to load
+       leave its fish procedural instead of shifting the others. */
+    urls.forEach((url, index) => {
+      loader.load(
+        url,
+        (gltf) => { if (this.boids.length) this.applyModel(gltf, index, urls.length); },
+        null,
+        (err) => {
+          // The procedural school is already swimming, so this is a
+          // downgrade in looks and not a failure the user ever sees.
+          console.warn('[reef-school] fish model failed to load:', url, err);
+        }
+      );
+    });
+  },
+
+  /* Replace every fish's body with a clone of the loaded model,
+     leaving its position, velocity and place in the flock alone.
+     The boids simulation neither knows nor cares what is being
+     drawn, which is the whole reason this swap is safe mid-flight. */
+  applyModel: function (gltf, index, total) {
+    const source = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+    if (!source) return;
+
+    const slot  = index || 0;
+    const every = total || 1;
+
+    source.updateMatrixWorld(true);
+
+    /* Measure once. The longest dimension of a fish is its body, so
+       scaling that to L reproduces the size the procedural fish was
+       built at and keeps the flocking distances meaningful - those
+       are all in the same units as `length`. */
+    const span = new THREE.Vector3();
+    const centre = new THREE.Vector3();
+    const box = new THREE.Box3().setFromObject(source);
+    box.getSize(span);
+    box.getCenter(centre);
+
+    const longest = Math.max(span.x, span.y, span.z);
+    if (!longest || !isFinite(longest)) {
+      console.warn('[reef-school] fish model measured nothing, keeping procedural fish');
+      return;
+    }
+
+    /* A rigged model must be cloned with SkeletonUtils: a plain
+       clone copies the meshes but shares the skeleton, so every
+       fish in the school deforms identically to the first one. */
+    let rigged = false;
+    source.traverse((n) => { if (n.isSkinnedMesh) rigged = true; });
+
+    /* Prefer three's own implementation if a future A-Frame starts
+       bundling it; fall back to the copy above, which is why a
+       rigged model works here at all. */
+    const utils = THREE.SkeletonUtils;
+    const cloneRig = (utils && utils.clone) ? utils.clone : cloneRigged;
+    const cloneOf = rigged ? (o) => cloneRig(o) : (o) => o.clone(true);
+
+    const r = this.data.modelRotation;
+    const clips = (this.data.modelAnimate && gltf.animations) || [];
+
+    this.boids.forEach((b, i) => {
+      if (i % every !== slot) return;   // another species' fish
+
+      this.clearVisual(b);
+
+      const model = cloneOf(source);
+
+      /* Materials are shared across clones by default, so fading one
+         fish would fade the whole school. Clone them per fish, and
+         force `transparent` on - with it false, setting `opacity` is
+         silently ignored and a fish would pop out of existence at
+         the visibility cutoff instead of fading. */
+      const materials = [];
+      model.traverse((node) => {
+        if (!node.isMesh && !node.isSkinnedMesh) return;
+        if (!node.material) return;
+
+        const many = Array.isArray(node.material);
+        const list = many ? node.material : [node.material];
+
+        const cloned = list.map((mat) => {
+          const c = mat.clone();
+          c.transparent = true;
+          materials.push(c);
+          return c;
+        });
+
+        node.material = many ? cloned : cloned[0];
+
+        // The flock never stops moving, so per-fish culling costs
+        // more than it saves.
+        node.frustumCulled = false;
+      });
+
+      /* Centre the body on the fish's own origin, then turn and size
+         it. Wrapping rather than editing the clone's own transform
+         leaves whatever the exporter baked into the root intact. */
+      const centred = new THREE.Group();
+      centred.position.copy(centre).negate();
+      centred.add(model);
+
+      const holder = new THREE.Group();
+      holder.rotation.set(
+        THREE.MathUtils.degToRad(r.x),
+        THREE.MathUtils.degToRad(r.y),
+        THREE.MathUtils.degToRad(r.z));
+      holder.scale.setScalar(b.L / longest);
+      holder.add(centred);
+
+      b.group.add(holder);
+
+      b.materials = materials;
+      b.matFade = materials.map((m) => m.opacity);
+      b.tail = null;      // no pivot in the model we could name
+      b.pecs = [];
+
+      if (clips.length) {
+        b.mixer = new THREE.AnimationMixer(model);
+        const action = b.mixer.clipAction(clips[0]);
+        // Offset each fish into the clip so the school does not beat
+        // in unison, which reads as one animated object.
+        action.time = Math.random() * clips[0].duration;
+        action.play();
+      }
+    });
+
+    // A swap part-way through a bleaching run must not reset the fade.
+    this.setScatter(this.scatter);
+  },
+
+  /* Drop a fish's current body. The procedural geometries are built
+     per fish so they are genuinely this fish's to free; a model's
+     geometry is shared between clones, and disposing it repeatedly
+     is harmless because the whole school goes at once. */
+  clearVisual: function (b) {
+    if (b.mixer) {
+      b.mixer.stopAllAction();
+      b.mixer = null;
+    }
+
+    while (b.group.children.length) {
+      const child = b.group.children[0];
+      b.group.remove(child);
+
+      child.traverse((node) => {
+        if (node.geometry) node.geometry.dispose();
+        if (!node.material) return;
+        const list = Array.isArray(node.material) ? node.material : [node.material];
+        list.forEach((m) => m.dispose());
+      });
+    }
   },
 
   tick: function (time, delta) {
@@ -821,13 +1119,20 @@ AFRAME.registerComponent('reef-school', {
       const bank = Math.max(-0.7, Math.min(0.7, -dy * 6));
       b.group.rotation.x += (bank - b.group.rotation.x) * Math.min(1, dt * 6);
 
-      /* tail beat, tied to actual speed */
-      const rate = 12 + (vLen / d.speed) * 8;
-      b.beat += dt * rate;
-      if (b.tail) b.tail.rotation.y = Math.sin(b.beat) * (0.35 + s * 0.3);
-      b.pecs.forEach((p) => {
-        p.mesh.rotation.z = -0.25 + p.side * Math.sin(b.beat * 0.6) * 0.18;
-      });
+      /* Tail beat, tied to actual speed. A model carrying its own
+         swim clip drives that instead, run faster as the school
+         scatters for the same reason the procedural beat is. A model
+         without a clip simply glides, which still reads at this size. */
+      if (b.mixer) {
+        b.mixer.update(dt * (1 + s * 1.2));
+      } else {
+        const rate = 12 + (vLen / d.speed) * 8;
+        b.beat += dt * rate;
+        if (b.tail) b.tail.rotation.y = Math.sin(b.beat) * (0.35 + s * 0.3);
+        b.pecs.forEach((p) => {
+          p.mesh.rotation.z = -0.25 + p.side * Math.sin(b.beat * 0.6) * 0.18;
+        });
+      }
     }
   },
 
@@ -840,13 +1145,38 @@ AFRAME.registerComponent('reef-school', {
     this.boids.forEach((b, i) => {
       // Stagger it so they leave a few at a time.
       const own = Math.max(0, Math.min(1, fade * 1.4 - (i / this.boids.length) * 0.4));
-      b.materials[0].opacity = own;
-      b.materials[1].opacity = own * 0.72;
+
+      /* Scale each material against its own starting opacity rather
+         than assuming there are exactly two. A model may arrive with
+         any number, and hard-coding [0] and [1] threw on a single-
+         material fish. */
+      b.materials.forEach((m, k) => {
+        const base = (b.matFade && b.matFade[k] !== undefined) ? b.matFade[k] : 1;
+        const value = own * base;
+        m.opacity = value;
+
+        /* Blend only while there is something to blend.
+
+           A material left permanently transparent is pushed into the
+           renderer's transparent queue for the life of the scene:
+           re-sorted by depth every frame, unable to reject fragments
+           early, and liable to draw in the wrong order against the
+           coral and against other fish. At full opacity none of that
+           buys anything, so the flag follows the fade. */
+        const blend = value < 0.999;
+        if (m.transparent !== blend) {
+          m.transparent = blend;
+          m.needsUpdate = true;
+        }
+      });
+
       b.group.visible = own > 0.02;
     });
   },
 
   remove: function () {
+    this.boids.forEach((b) => this.clearVisual(b));
+    this.boids.length = 0;
     this.el.removeObject3D('school');
   }
 });
