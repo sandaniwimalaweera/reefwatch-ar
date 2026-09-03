@@ -527,7 +527,8 @@
          silent and — the preference being remembered — stays that
          way. Leave the arming in place: the button's own handler
          takes this one. */
-      if (ev && ev.target && ev.target.closest && ev.target.closest('#audio')) {
+      if (ev && ev.target && ev.target.closest &&
+          ev.target.closest('#audio, #soundPop:not([hidden])')) {
         audio._ensure();
         return;
       }
@@ -560,8 +561,12 @@
                     (activation && activation.hasBeenActive);
 
       /* Refused. Build nothing — the first touch anywhere on the
-         page will build it and start the bed. */
-      if (!allowed) return;
+         page will build it and start the bed — and say why the reef
+         is quiet in the meantime. */
+      if (!allowed) {
+        showPrompt();
+        return;
+      }
 
       if (!audio._ensure()) return;
       audio.start().catch(function () {});
@@ -577,6 +582,77 @@
 
     if (document.readyState === 'complete') setTimeout(attempt, 0);
     else global.addEventListener('load', function () { setTimeout(attempt, 0); });
+  }
+
+  /* A page may offer a prompt to show when — and only when — the
+     browser has refused to start the bed on load. It explains the
+     silence and offers the one tap the autoplay policy wants.
+
+     It gates nothing: the arming above is still live, so a tap
+     anywhere else starts the sound, and the prompt takes itself
+     away when it hears that happen. A page without the markup
+     (both AR scenes open on a Start gate, which already collects a
+     tap) simply has nothing to show.
+
+     Once a session — on a second load the reader knows the site has
+     sound and does not need telling again. */
+  var TOLD = 'reefwatch:sound-prompt-shown';
+
+  function alreadyTold () {
+    try { return global.sessionStorage.getItem(TOLD) === 'yes'; }
+    catch (err) { return false; }
+  }
+
+  function showPrompt () {
+    var pop = document.getElementById('soundPop');
+    if (!pop || alreadyTold()) return;
+
+    try { global.sessionStorage.setItem(TOLD, 'yes'); }
+    catch (err) { /* it shows again next load, which is no failure */ }
+
+    var go    = document.getElementById('soundPopGo');
+    var close = document.getElementById('soundPopClose');
+    var done  = false;
+
+    var dismiss = function () {
+      if (done) return;
+      done = true;
+      global.removeEventListener('reef-audio-state', onState);
+      pop.classList.add('is-gone');
+      // Out of the tree once faded, so it can never take a stray tap.
+      setTimeout(function () { pop.hidden = true; }, 360);
+    };
+
+    /* The sound started — by this prompt's button, or by a tap
+       anywhere else on the page. Either way there is nothing left
+       to ask for. */
+    function onState () {
+      if (audio.running) dismiss();
+    }
+    global.addEventListener('reef-audio-state', onState);
+
+    if (go) {
+      go.addEventListener('click', function () {
+        audio.wanted = true;
+        writePref(true);
+        audio.start().catch(function () {});
+        dismiss();
+      });
+    }
+
+    /* The X is a real answer, not just a way to hide the message:
+       closing it means silence, and the speaker button goes to its
+       off state to say so. Sound is one tap of that button away. */
+    if (close) {
+      close.addEventListener('click', function () {
+        audio.wanted = false;
+        writePref(false);
+        audio._announce();
+        dismiss();
+      });
+    }
+
+    pop.hidden = false;
   }
 
   /* Delegated rather than bound per button, so a control a scene

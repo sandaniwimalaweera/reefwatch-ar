@@ -48,6 +48,36 @@
     </svg>
   </button>
 
+  <!-- Sound prompt.
+       Browsers refuse to play audio until the page has been touched
+       once, so the reef cannot fade in on load. This says so, in
+       passing, and offers the touch. It is deliberately not a gate:
+       it sits at the foot of the page, blocks nothing, and a tap
+       anywhere else starts the sound and dismisses it anyway.
+
+       Revealed by ambience.js only when the browser has actually
+       refused. Where autoplay is permitted the bed is already
+       playing and the reader never sees this. -->
+  <div class="sound-pop" id="soundPop" role="region"
+       aria-labelledby="soundPopTitle" hidden>
+    <button class="sound-pop-close" id="soundPopClose" type="button"
+            aria-label="Close and stay silent" data-sfx="back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
+      </svg>
+    </button>
+
+    <p class="sound-pop-title" id="soundPopTitle">Better with sound</p>
+    <p class="sound-pop-copy">
+      The reef has a soundscape &mdash; surge, bubbles, and the crackle of
+      snapping shrimp. Your browser needs one tap before it will play.
+    </p>
+    <button class="sound-pop-go" id="soundPopGo" type="button" data-sfx="on">
+      Turn on sound
+    </button>
+  </div>
+
   <main class="shell">
 
     <header class="masthead">
