@@ -11,76 +11,123 @@
    export may be 0.2 units across, another 400. Hard-coding a
    scale means re-tuning every time the model changes.
 
-   This measures the loaded mesh's bounding box and scales it so
-   its largest dimension equals `size` in scene units, then
-   drops it so its base sits on the surface below it.
+   This measures the loaded model and scales it so its largest
+   dimension equals `size` in the parent's units, then drops it
+   so its base sits on the surface below it.
+
+   Two rules keep that measurement honest, both learned from the
+   marker scene sizing its coral differently on iOS and Android:
+
+   1. Measure from local matrices only, never world ones. A world
+      measurement is taken through whatever the image tracker had
+      written into the target's matrix that instant, so the answer
+      depended on when the model happened to finish loading.
+
+   2. Keep measuring for a moment, and re-fit whenever the model
+      turns out to be bigger than it first looked. A model whose
+      geometry is still arriving measures small, and a first-and-
+      final fit locks that in as a model several times too large.
    ------------------------------------------------------------ */
 AFRAME.registerComponent('fit-model', {
   schema: {
-    size: { type: 'number', default: 0.22 },
-    lift: { type: 'number', default: 0.0 }
+    size:   { type: 'number', default: 0.22 },
+    lift:   { type: 'number', default: 0.0 },
+    settle: { type: 'number', default: 1500 }   // ms to keep re-measuring
   },
 
-   init: function () {
-    this.tries = 0;
+  init: function () {
+    this.largest = 0;
+    this.until = 0;
+    this.polling = false;
+
+    this.box = new THREE.Box3();
+    this.nodeBox = new THREE.Box3();
+    this.local = new THREE.Matrix4();
+    this.span = new THREE.Vector3();
+    this.centre = new THREE.Vector3();
 
     // The model may already be attached by the time this component
     // initialises — a-asset-item preloading makes that race real —
     // so check for it as well as listening for the event.
-    this.el.addEventListener('model-loaded', () => this.attempt());
-    if (this.el.getObject3D('mesh')) this.attempt();
+    this.el.addEventListener('model-loaded', () => this.begin());
+    if (this.el.getObject3D('mesh')) this.begin();
   },
 
-  // Draco geometry decodes asynchronously, so the first measurement
-  // can come back empty. Retry until the box is real, rather than
-  // silently leaving the model at its raw export size.
+  begin: function () {
+    this.until = performance.now() + this.data.settle;
+    if (this.polling) return;
+    this.polling = true;
+    this.attempt();
+  },
+
   attempt: function () {
-    if (this.done) return;
     this.fit();
-    if (!this.done && this.tries++ < 40) {
+    if (performance.now() < this.until) {
       setTimeout(() => this.attempt(), 100);
+    } else {
+      this.polling = false;
+      if (!this.largest) console.warn('[fit-model] never measured a model', this.el);
     }
+  },
+
+  /* Bounding box of the model in this entity's own frame.
+
+     Built by walking each mesh's own matrix up to — but not
+     including — this entity, so the result ignores the entity's
+     transform and everything above it. That makes the number the
+     same on every device, and makes re-fitting idempotent rather
+     than compounding the last fit. */
+  measure: function () {
+    const root = this.el.getObject3D('mesh');
+    const box = this.box.makeEmpty();
+    if (!root) return box;
+
+    const stop = this.el.object3D;
+
+    root.traverse((node) => {
+      if (!node.isMesh || !node.geometry) return;
+
+      if (!node.geometry.boundingBox) node.geometry.computeBoundingBox();
+      const local = node.geometry.boundingBox;
+      if (!local) return;
+
+      this.local.identity();
+      for (let n = node; n && n !== stop; n = n.parent) {
+        n.updateMatrix();
+        this.local.premultiply(n.matrix);
+      }
+
+      box.union(this.nodeBox.copy(local).applyMatrix4(this.local));
+    });
+
+    return box;
   },
 
   fit: function () {
-    const mesh = this.el.getObject3D('mesh');
-    if (!mesh || this.done) return;
+    const box = this.measure();
+    if (box.isEmpty()) return;
+
+    box.getSize(this.span);
+    const largest = Math.max(this.span.x, this.span.y, this.span.z);
+    if (!largest || !isFinite(largest)) return;
+
+    // Only ever grow. A later measurement that comes back smaller
+    // is a partially loaded model, not a smaller one.
+    if (largest <= this.largest + 1e-6) return;
+    this.largest = largest;
 
     const obj = this.el.object3D;
-
-    // Measure at neutral transform, otherwise each fit compounds
-    // the last one.
-    obj.scale.set(1, 1, 1);
-    obj.position.set(0, 0, 0);
-    obj.updateMatrixWorld(true);
-
-    // setFromObject returns world space. Convert into this entity's
-    // local space so the numbers mean something we can act on.
-    const box = new THREE.Box3().setFromObject(mesh);
-    const toLocal = new THREE.Matrix4().copy(obj.matrixWorld).invert();
-    box.applyMatrix4(toLocal);
-
-    const span = new THREE.Vector3();
-    box.getSize(span);
-       const largest = Math.max(span.x, span.y, span.z);
-    if (!largest || !isFinite(largest)) {
-      console.warn('[fit-model] bounding box not ready', span);
-      return;
-    }
-
     const factor = this.data.size / largest;
     obj.scale.setScalar(factor);
 
-    // Centre horizontally, then sit the base on the card surface.
-    const centre = new THREE.Vector3();
-    box.getCenter(centre);
-
-    obj.position.x = -centre.x * factor;
-    obj.position.z = -centre.z * factor;
+    // Centre horizontally, then sit the base on the surface.
+    box.getCenter(this.centre);
+    obj.position.x = -this.centre.x * factor;
+    obj.position.z = -this.centre.z * factor;
     obj.position.y = -box.min.y * factor + this.data.lift;
 
     this.done = true;
-    this.el.emit('fitted', { factor: factor, span: span });
+    this.el.emit('fitted', { factor: factor, span: this.span.clone() });
   }
 });
 

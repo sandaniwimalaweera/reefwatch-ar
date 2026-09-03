@@ -117,11 +117,13 @@
         <a-entity caustic-light></a-entity>
 
         <!-- The coral. fit-model sizes it automatically, so no
-             hand-tuned scale value is needed for a new model. -->
+             hand-tuned scale value is needed for a new model.
+             size is in card widths: the model stands 0.55 of the
+             printed card tall, whatever units it was exported in. -->
         <a-entity
           id="coral"
           gltf-model="#coralModel"
-          fit-model="size: 0.30"
+          fit-model="size: 0.55"
           bleachable
           cast-shadows
           tap-to-bleach
@@ -129,7 +131,7 @@
         </a-entity>
 
                 <!-- School. Boids flocking - no path is authored. -->
-        <a-entity reef-school="count: 14; radius: 0.42; coral: 0.22"></a-entity>
+        <a-entity reef-school="count: 14; radius: 0.50; coral: 0.22; maxHeight: 0.48"></a-entity>
         <!-- Drifting particulate -->
         <a-entity marine-snow="count: 70; spread: 0.7; top: 0.5"></a-entity>
 
