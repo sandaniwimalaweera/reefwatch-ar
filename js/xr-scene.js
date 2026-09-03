@@ -113,11 +113,16 @@ AFRAME.registerComponent('hit-test-placer', {
     this.hasHit = false;
     this.placed = false;
     this.anchor = null;
-    this.lastHit = null;
     this.matrix = new THREE.Matrix4();
     this.pos = new THREE.Vector3();
     this.quat = new THREE.Quaternion();
     this.scl = new THREE.Vector3();
+
+    /* A tap does not place the reef there and then. It raises this
+       flag, and the next animation frame does the placing. Why, at
+       length, in place(). */
+    this.wantPlace = false;
+    this.wantPlaceAt = 0;
 
     const sceneEl = this.el.sceneEl;
 
@@ -138,7 +143,10 @@ AFRAME.registerComponent('hit-test-placer', {
           this.el.emit('hit-test-failed', { message: err && err.message });
         });
 
-      this.onSelect = () => this.place();
+      this.onSelect = () => {
+        this.wantPlace = true;
+        this.wantPlaceAt = performance.now();
+      };
       session.addEventListener('select', this.onSelect);
 
       session.addEventListener('end', () => {
@@ -146,6 +154,7 @@ AFRAME.registerComponent('hit-test-placer', {
         this.source = null;
         this.hasHit = false;
         this.placed = false;
+        this.wantPlace = false;
         this.anchor = null;
       });
     });
@@ -162,6 +171,11 @@ AFRAME.registerComponent('hit-test-placer', {
     // Once placed, the only job left is to follow the anchor.
     if (this.placed) {
       if (this.anchor && this.data.target) {
+        /* An anchor whose physical point the runtime has lost is
+           dropped from frame.trackedAnchors, and asking for its pose
+           then returns nothing. Holding the last good pose is the
+           right response: the reef stays where it was rather than
+           snapping to the origin. */
         const pose = frame.getPose(this.anchor.anchorSpace, refSpace);
         if (pose) {
           this.matrix.fromArray(pose.transform.matrix);
@@ -181,13 +195,17 @@ AFRAME.registerComponent('hit-test-placer', {
         if (this.data.reticle) this.data.reticle.setAttribute('visible', false);
         this.el.emit('hit-test-lost');
       }
+      /* Tapped while the surface was momentarily lost. Wait a few
+         frames for it to come back rather than throwing the tap
+         away — but not for ever, or a tap could fire much later. */
+      if (this.wantPlace && performance.now() - this.wantPlaceAt > 400) {
+        this.wantPlace = false;
+      }
       return;
     }
 
-    // Kept so that place() can turn this exact hit into an anchor.
-    this.lastHit = results[0];
-
-    const pose = results[0].getPose(refSpace);
+    const hit = results[0];
+    const pose = hit.getPose(refSpace);
     if (!pose) return;
 
     this.matrix.fromArray(pose.transform.matrix);
@@ -203,49 +221,95 @@ AFRAME.registerComponent('hit-test-placer', {
       this.hasHit = true;
       this.el.emit('hit-test-found');
     }
+
+    // The tap raised in the select handler is honoured here, inside
+    // the frame, so the hit result it anchors to is still live.
+    if (this.wantPlace) {
+      this.wantPlace = false;
+      this.place(hit, frame, refSpace);
+    }
   },
 
-  place: function () {
-    if (!this.hasHit || !this.data.target) return;
+  /* Called only from tick, only with a hit result taken from the
+     frame that is currently active.
+
+     That restriction is the whole point. Writing the pose once is
+     not enough: the runtime keeps refining its estimate of the room
+     as it sees more of it, so a position captured in one frame
+     slowly disagrees with the same physical point later, and the
+     reef appears to slide across the floor.
+
+     An anchor hands that problem to the platform — it tracks the
+     physical point and reports a corrected pose every frame — but
+     an XRHitTestResult is only valid for the duration of the frame
+     that produced it. Creating the anchor from a result captured in
+     an earlier frame, which is what happens if the tap is serviced
+     directly in the `select` handler, throws InvalidStateError. The
+     catch then reports "anchor failed" and the reef falls back to
+     the fixed pose that drifts. The bug and the symptom it causes
+     look identical on screen, which is why this is spelled out.
+
+     XRFrame.createAnchor is tried as a second route because some
+     runtimes grant the `anchors` feature without supporting
+     anchor creation from a hit result. */
+  place: function (hit, frame, refSpace) {
+    if (!this.data.target) return;
 
     this.data.target.object3D.position.copy(this.pos);
     this.data.target.object3D.quaternion.copy(this.quat);
     this.data.target.setAttribute('visible', true);
-
-    /* Writing the pose once is not enough. The runtime continuously
-       refines its estimate of the world as it sees more of the room,
-       so a position captured in one frame slowly disagrees with the
-       same physical point later — the reef appears to slide.
-
-       An anchor hands that problem to the platform: it tracks the
-       physical point and reports a corrected pose every frame.
-
-       `anchors` is requested as an optional feature, so it may be
-       absent. The status is reported rather than failing silently,
-       because a missing anchor and a drifting anchor look identical
-       on screen. */
-    if (this.lastHit && this.lastHit.createAnchor) {
-      this.lastHit.createAnchor().then((anchor) => {
-        this.anchor = anchor;
-        this.el.emit('anchor-status', { state: 'anchored' });
-      }).catch(() => {
-        // Without an anchor the static pose above still holds; it
-        // just drifts more as the session goes on.
-        this.el.emit('anchor-status', { state: 'anchor failed' });
-      });
-    } else {
-      this.el.emit('anchor-status', { state: 'anchors unsupported' });
-    }
 
     if (!this.placed) {
       this.placed = true;
       if (this.data.reticle) this.data.reticle.setAttribute('visible', false);
       this.el.emit('reef-placed');
     }
+
+    this.anchorHere(hit, frame, refSpace);
+  },
+
+  anchorHere: function (hit, frame, refSpace) {
+    const done = (anchor) => {
+      this.anchor = anchor;
+      this.el.emit('anchor-status', { state: 'anchored' });
+    };
+
+    if (hit && hit.createAnchor) {
+      hit.createAnchor().then(done).catch(() => this.anchorFromPose(frame, refSpace));
+      return;
+    }
+    this.anchorFromPose(frame, refSpace);
+  },
+
+  anchorFromPose: function (frame, refSpace) {
+    if (!frame || !frame.createAnchor || !refSpace) {
+      this.el.emit('anchor-status', { state: 'anchors unsupported' });
+      return;
+    }
+
+    let transform;
+    try {
+      transform = new XRRigidTransform(
+        { x: this.pos.x, y: this.pos.y, z: this.pos.z },
+        { x: this.quat.x, y: this.quat.y, z: this.quat.z, w: this.quat.w });
+    } catch (e) {
+      this.el.emit('anchor-status', { state: 'anchors unsupported' });
+      return;
+    }
+
+    frame.createAnchor(transform, refSpace).then((anchor) => {
+      this.anchor = anchor;
+      this.el.emit('anchor-status', { state: 'anchored' });
+    }).catch(() => {
+      // Without an anchor the fixed pose written above still holds;
+      // it just drifts more as the session goes on.
+      this.el.emit('anchor-status', { state: 'anchor failed' });
+    });
   },
 
   rearm: function () {
     this.placed = false;
+    this.wantPlace = false;
     if (this.anchor && this.anchor.delete) this.anchor.delete();
     this.anchor = null;
     if (this.data.target) this.data.target.setAttribute('visible', false);
