@@ -1,8 +1,10 @@
 /* ============================================================
    ReefWatch AR — shared interface behaviour
 
-   Asset loading feedback, the ambience toggle, and the credits
-   sheet. Used by both scenes.
+   Asset loading feedback and the credits sheet. Used by both
+   scenes. The audio button and the interface sounds wire
+   themselves in js/ambience.js, so that they also work on the
+   landing page, which loads none of this.
    ============================================================ */
 
 (function () {
@@ -64,37 +66,31 @@
   }
 
   /* ------------------------------------------------------------
-     Ambience toggle
-     Audio starts muted. Browsers block autoplay without a
-     gesture, and unexpected sound is hostile anyway.
+     The reef gets quieter as it bleaches
+
+     Snapping shrimp and fish leave a dying reef, so the soundscape
+     thins out with the colour. The toggle itself lives in
+     js/ambience.js; this is only the link from the scene's state
+     to the sound.
      ------------------------------------------------------------ */
   function setupAudio () {
-    const btn = document.getElementById('audio');
-    if (!btn || !window.ReefAmbience) return;
-
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();   // must not also place the reef
-      window.ReefAmbience.toggle().then((on) => {
-        btn.classList.toggle('is-on', on);
-        btn.setAttribute('aria-label', on ? 'Mute ambience' : 'Play ambience');
-      }).catch(() => {
-        btn.disabled = true;
-        btn.title = 'Audio is unavailable on this device';
-      });
-    });
-
-    // The reef gets quieter as it bleaches — snapping shrimp and
-    // fish leave a dying reef, so the soundscape thins out.
     const scene = document.querySelector('a-scene');
-    if (!scene) return;
+    if (!scene || !window.ReefAudio) return;
 
     scene.addEventListener('temperature-change', (ev) => {
-      window.ReefAmbience.setHealth(1 - ev.detail.bleach);
+      window.ReefAudio.setHealth(1 - ev.detail.bleach);
     });
 
     scene.addEventListener('reef-bleach-progress', (ev) => {
-      window.ReefAmbience.setHealth(1 - ev.detail.amount);
+      window.ReefAudio.setHealth(1 - ev.detail.amount);
     });
+
+    /* The two taps that are not buttons: dropping the reef onto a
+       surface, and tapping the coral itself to bleach it. Both are
+       aimed at the world rather than at a control, so the delegated
+       handler in js/ambience.js never sees them. */
+    scene.addEventListener('reef-placed', () => window.ReefAudio.sfx('place'));
+    scene.addEventListener('reef-state-change', () => window.ReefAudio.sfx('tap'));
   }
 
   /* ------------------------------------------------------------

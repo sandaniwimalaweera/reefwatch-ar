@@ -16,9 +16,19 @@ you download it - do not leave this until the end.
 
 ## Audio
 
-| Sound | File | Author | Source | Licence |
-|---|---|---|---|---|
-| Underwater ambience | `assets/audio/ambience.mp3` | *(fill in)* | Freesound | CC0 |
+No third-party audio. Every sound in the project — the underwater
+ambience and the interface taps alike — is synthesised at runtime by
+the Web Audio API in `js/ambience.js`. Nothing is sampled, recorded or
+downloaded, so there is nothing here to license.
+
+| Sound | Source | How it is made |
+|---|---|---|
+| Body of water | `js/ambience.js` | Brown noise through a slowly swept lowpass |
+| Surge | `js/ambience.js` | The same noise through a bandpass, breathing on a second, slower LFO |
+| Snapping shrimp | `js/ambience.js` | Short bandpassed noise bursts, scheduled at a rate set by reef health |
+| Bubbles | `js/ambience.js` | Sines with a rising pitch ramp, in streams of one to four |
+| Interface taps | `js/ambience.js` | The same droplet at five pitches, through the same reverb |
+| Underwater reverb | `js/ambience.js` | A generated impulse response: decaying noise, darkening as it decays |
 
 ## Libraries
 
