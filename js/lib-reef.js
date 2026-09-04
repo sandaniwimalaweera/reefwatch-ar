@@ -129,7 +129,9 @@ AFRAME.registerComponent('bleachable', {
             mat: c,
             base: c.color ? c.color.clone() : new THREE.Color('#ffffff'),
             baseRough: c.roughness !== undefined ? c.roughness : 0.6,
-            baseMetal: c.metalness !== undefined ? c.metalness : 0.0
+            baseMetal: c.metalness !== undefined ? c.metalness : 0.0,
+            // Only textured materials need the shader route; see patch().
+            uniform: c.map ? this.patch(c) : null
           });
           return c;
         });
@@ -141,17 +143,68 @@ AFRAME.registerComponent('bleachable', {
     });
   },
 
+  /* A material whose colour comes from a texture cannot be bleached
+     by tinting `mat.color`. The tint multiplies the sampled texel,
+     and the marker coral's glTF carries no baseColorFactor, so the
+     tint starts at white — lerping white toward bone is very nearly
+     a no-op while the JPEG underneath keeps every bit of its colour.
+     The markerless reef stores its colour as a baseColorFactor with
+     no map, which is why one scene bleached correctly and the other
+     looked barely touched by the same component.
+
+     After the sample is the only place the two can be blended, so
+     for textured materials the mix moves into the fragment shader.
+     Luminance is kept and hue discarded, which leaves the model's
+     own light and shade intact rather than flooding it flat white. */
+  patch: function (mat) {
+    const uniform = { value: 0 };
+
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uBleach = uniform;
+
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          '#include <common>\nuniform float uBleach;'
+        )
+        .replace(
+          '#include <color_fragment>',
+          [
+            '#include <color_fragment>',
+            'float bLum = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );',
+            'vec3 bDead = vec3( 1.0, 0.965, 0.925 ) * ( 0.55 + 0.62 * bLum );',
+            'diffuseColor.rgb = mix( diffuseColor.rgb, bDead, uBleach );'
+          ].join('\n')
+        );
+    };
+
+    /* Three.js caches compiled programs by material configuration,
+       which is identical here whether or not onBeforeCompile ran.
+       Without its own key a patched material can be handed an
+       unpatched program, and uBleach then does nothing at all. */
+    mat.customProgramCacheKey = () => 'bleachable';
+    mat.needsUpdate = true;
+
+    return uniform;
+  },
+
   update: function () { this.apply(); },
 
   apply: function () {
     const t = Math.min(1, Math.max(0, this.data.amount));
 
-    this.materials.forEach(({ mat, base, baseRough, baseMetal }) => {
-      if (mat.color) mat.color.copy(base).lerp(this.bone, t);
+    this.materials.forEach(({ mat, base, baseRough, baseMetal, uniform }) => {
+      if (uniform) uniform.value = t;
+      else if (mat.color) mat.color.copy(base).lerp(this.bone, t);
+
       // A dead skeleton is chalkier and less reflective than living tissue.
       if (mat.roughness !== undefined) mat.roughness = baseRough + (0.95 - baseRough) * t;
       if (mat.metalness !== undefined) mat.metalness = baseMetal * (1 - t);
-      mat.needsUpdate = true;
+
+      /* The uniform is read every frame once the program is built, so
+         a recompile is only owed to the paths that change material
+         state. Asking for one per frame stalls the tick on Android. */
+      if (!uniform) mat.needsUpdate = true;
     });
   }
 });
