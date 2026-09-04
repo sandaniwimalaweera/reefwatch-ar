@@ -8,6 +8,13 @@ AFRAME.registerComponent('tap-to-bleach', {
     duration: { type: 'number', default: 3400 }
   },
 
+  /* Taps that belong to a control rather than to the reef. The card
+     and hint are pointer-events: none, so a tap over them reaches
+     whatever is behind and is a tap on the reef; only the real
+     buttons are listed. Leaving them out is how the credits and
+     audio buttons used to bleach the coral as a side effect. */
+  controls: '.ar-back, .ar-credits, .ar-audio, .credits, #audio',
+
   init: function () {
     this.running = false;
     this.bleached = false;
@@ -16,12 +23,25 @@ AFRAME.registerComponent('tap-to-bleach', {
     this.onTap = this.onTap.bind(this);
     this.el.addEventListener('click', this.onTap);
 
-    // The MindAR canvas swallows some pointer events on certain
-    // Android builds, so listen at document level too.
+    /* The coral is a small target for a raycast, so a tap anywhere
+       on the scene counts. That fallback used to listen for `click`
+       and never fired on iOS: A-Frame's cursor component calls
+       preventDefault() on touchstart so it can raycast the tap
+       itself, and on iOS preventing the default there suppresses the
+       synthesised click for the whole page. `touchend` is the raw
+       event and survives, so it carries the fallback on a phone and
+       `click` stays for a desktop browser, where there is no touch.
+
+       Both fire for one tap on some builds. The `running` guard in
+       onTap absorbs the second — it stays set for the length of the
+       animation, which is far longer than the gap between the two —
+       so the pair cannot toggle the state twice. */
     this.onScreenTap = (ev) => {
-      if (ev.target.closest && ev.target.closest('.ar-back')) return;
+      if (ev.target && ev.target.closest && ev.target.closest(this.controls)) return;
       this.onTap();
     };
+
+    document.addEventListener('touchend', this.onScreenTap);
     document.addEventListener('click', this.onScreenTap);
   },
 
@@ -54,6 +74,7 @@ AFRAME.registerComponent('tap-to-bleach', {
 
   remove: function () {
     this.el.removeEventListener('click', this.onTap);
+    document.removeEventListener('touchend', this.onScreenTap);
     document.removeEventListener('click', this.onScreenTap);
   }
 });
