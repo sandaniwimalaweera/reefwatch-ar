@@ -7,7 +7,7 @@ required by the academic integrity section of the assignment brief.
 
 | Model | File | Author | Source | Licence |
 |---|---|---|---|---|
-| Coral head | `assets/models/coral.glb` | rkuhlf | https://sketchfab.com/3d-models/coral-3f051742aa3b466fa3b8df9bb990d170 | CC BY 4.0 |
+| Coral head | `assets/models/coral.glb` | JonathanFreire | https://sketchfab.com/3d-models/coral-3f051742aa3b466fa3b8df9bb990d170 | CC BY 4.0 |
 | Reef section | `assets/models/reef.glb` | rkuhlf | https://sketchfab.com/3d-models/coral-dbf4bee13bf84396815073e5cabf8ac3 | CC BY 4.0 |
 | Reef section, real-scale variant | `assets/models/reef-ar.glb` | rkuhlf | as above — same mesh, root transform baked for AR Quick Look | CC BY 4.0 |
 

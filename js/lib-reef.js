@@ -3,26 +3,9 @@
    Components used by both the marker scene and the markerless
    scene. Loaded before either page's own script. */
 
-/* Source models come in wildly different units — one Sketchfab
-   export may be 0.2 units across, another 400. Hard-coding a
-   scale means re-tuning every time the model changes.
-
-   This measures the loaded model and scales it so its largest
-   dimension equals `size` in the parent's units, then drops it
-   so its base sits on the surface below it.
-
-   Two rules keep that measurement honest, both learned from the
-   marker scene sizing its coral differently on iOS and Android:
-
-   1. Measure from local matrices only, never world ones. A world
-      measurement is taken through whatever the image tracker had
-      written into the target's matrix that instant, so the answer
-      depended on when the model happened to finish loading.
-
-   2. Keep measuring for a moment, and re-fit whenever the model
-      turns out to be bigger than it first looked. A model whose
-      geometry is still arriving measures small, and a first-and-
-      final fit locks that in as a model several times too large. */
+/*fit-model - Makes a downloaded 3D model the right size. Without it,
+ a coral might come out the size of a house or the size of a grain of rice,4
+  because every model file uses different units.*/
 AFRAME.registerComponent('fit-model', {
   schema: {
     size:   { type: 'number', default: 0.22 },
@@ -65,13 +48,6 @@ AFRAME.registerComponent('fit-model', {
     }
   },
 
-  /* Bounding box of the model in this entity's own frame.
-
-     Built by walking each mesh's own matrix up to — but not
-     including — this entity, so the result ignores the entity's
-     transform and everything above it. That makes the number the
-     same on every device, and makes re-fitting idempotent rather
-     than compounding the last fit. */
   measure: function () {
     const root = this.el.getObject3D('mesh');
     const box = this.box.makeEmpty();
@@ -126,11 +102,8 @@ AFRAME.registerComponent('fit-model', {
   }
 });
 
-/* Clones every material so we never mutate a shared one, stores
-   the original colour, then blends toward bone white as
-   `amount` runs 0 → 1.
-
-   This is why no second white model is needed. */
+/*bleachable - Turns the coral white. You give it a number from 0 to 1. 0 = healthy colour. 
+1 = fully bleached. Anything between = partly bleached.*/
 AFRAME.registerComponent('bleachable', {
   schema: {
     amount: { type: 'number', default: 0 }
@@ -183,13 +156,7 @@ AFRAME.registerComponent('bleachable', {
   }
 });
 
-/* A proper fish rather than a sphere on a stick.
-
-   Body is a lathe — a profile curve revolved around the long
-   axis — which gives the tapered fusiform shape real fish have.
-   Flattening it laterally makes it read as a fish from the side.
-   Fins are thin cones and triangles. Tail beat, banking and
-   pitch are driven per-frame in tick(). */
+/* reef-fish — Makes one fish that swims in a circle. Old version. You don't use it any more */
 AFRAME.registerComponent('reef-fish', {
   schema: {
     hue:     { type: 'color',  default: '#FFB35C' },
@@ -348,8 +315,7 @@ AFRAME.registerComponent('reef-fish', {
   }
 });
 
-/* Slow drifting particulate. Sells "underwater" more cheaply
-   than any amount of extra geometry. */
+/* marine-snow — Tiny white dots drifting down, like dust in water. Makes it feel underwater*/
 AFRAME.registerComponent('marine-snow', {
   schema: {
     count:  { type: 'number', default: 90 },
@@ -407,9 +373,7 @@ AFRAME.registerComponent('marine-snow', {
   }
 });
 
-/* Sunlight breaking on the surface, projected down onto the
-   scene. A slowly animated pattern on a spotlight is enough to
-   suggest water above without rendering any. */
+/* caustic-light — A blue light that flickers, like sunlight coming through waves */
 AFRAME.registerComponent('caustic-light', {
   schema: {
     intensity: { type: 'number', default: 1.1 }
@@ -433,14 +397,7 @@ AFRAME.registerComponent('caustic-light', {
   }
 });
 
-/* A soft dark ellipse on the ground beneath an object. Real
-   shadow mapping cannot help here — there is no virtual light
-   matching the room's actual lighting — but the eye reads any
-   dark patch under an object as contact. Without it, placed
-   models appear to hover.
-
-   The gradient is drawn once into a canvas and used as an alpha
-   map, so it costs one texture and two triangles. */
+/* contact-shadow — A dark blurry circle on the floor under the coral, so it looks like it's sitting on the table instead of floating. */
 AFRAME.registerComponent('contact-shadow', {
   schema: {
     radius:  { type: 'number', default: 0.8 },
@@ -504,25 +461,10 @@ AFRAME.registerComponent('contact-shadow', {
   }
 });
 
-/* The mesh construction from reef-fish, pulled out so the school
-   can stamp out many bodies without duplicating the geometry code.
-   Returns the group plus the parts that need animating. */
+/* buildFish — Not a tool you use. It's a helper that builds one fish body (head, tail, fins, eyes). Tool 8 calls it 14 times */
 function buildFish (L, hue) {
   const group = new THREE.Group();
 
-  /* metalness stays at zero deliberately.
-
-     A metallic surface in a physically based renderer takes its
-     colour from what it reflects, and this scene has no environment
-     map to reflect — the background is a live camera feed, which the
-     renderer knows nothing about. Any metalness above zero therefore
-     mixes in black rather than a reflection, and the fish come out
-     darker and duller than the palette says they are. The corals are
-     exported at metallicFactor 0 for the same reason.
-
-     Gloss comes from low roughness instead, which needs no
-     environment: it sharpens the highlight from the lights that are
-     actually in the scene. */
   const skin = new THREE.MeshStandardMaterial({
     color: new THREE.Color(hue),
     roughness: 0.34,
@@ -671,18 +613,9 @@ function cloneRigged (source) {
   return copy;
 }
 
-/* Boids flocking (Reynolds, 1987). Each fish steers by three
-   local rules — separation, alignment, cohesion — summed with
-   two environmental forces: stay inside the reef volume, and
-   don't swim through the coral.
-
-   No path is authored anywhere. The schooling, the splitting
-   around the coral and the re-forming afterwards are all
-   emergent from those five weights.
-
-   Neighbour search is brute force. At this count that is a few
-   hundred distance checks per frame, which is cheaper on mobile
-   than maintaining a spatial index. */
+/* reef-school — The flock of fish. This is the big one. Every fish follows 3 simple rules: don't bump into neighbours,
+ swim the same way as neighbours, stay near neighbours. Nobody draws a path — the schooling just happens on its own.
+  When the coral bleaches, the fish speed up, spread out, and fade away */
 AFRAME.registerComponent('reef-school', {
   schema: {
     count:      { type: 'number', default: 14 },

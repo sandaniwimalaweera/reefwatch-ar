@@ -9,7 +9,21 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Public+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
+  <!--framework libraries-->
+
+  <!-- A-Frame v1.5.0: High-level WebGL framework for 3D/VR/AR
+       - Built on top of Three.js
+       - Makes 3D development easier
+       - Handles rendering, cameras, entities
+  -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <!-- MindAR v1.2.5: Marker detection library
+       - Computer vision for detecting markers
+       - Calculates marker position & rotation
+       - Integrates directly with A-Frame
+       - Uses targets.mind file for recognition
+  -->
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <link rel="stylesheet" href="css/ar.css">
@@ -42,10 +56,16 @@
   </div>
 
   <a class="ar-back" href="index.html">Back</a>
+   <!-- CREDITS BUTTON -->
+  <button class="ar-credits" id="creditsOpen" type="button">Credits</button>
+
+  <!-- AUDIO BUTTON -->
   <button class="ar-audio" id="audio" aria-label="Play ambience">
+    <!-- icon when audio is off-->
     <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <path d="M11 5 6 9H2v6h4l5 4z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/>
     </svg>
+    <!-- icon when audio is on-->
     <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>
     </svg>
@@ -70,7 +90,8 @@
       </p>
 
       <h3>3D models</h3>
-      <p>Coral and reef models by rkuhlf, via Sketchfab, CC&nbsp;BY&nbsp;4.0.</p>
+      <p>Coral model by JonathanFreire and reef model by rkuhlf, both via
+         Sketchfab, CC&nbsp;BY&nbsp;4.0.</p>
 
       <h3>Libraries</h3>
       <p>A-Frame and MindAR, both MIT licensed. Fish, particles and every
@@ -83,7 +104,7 @@
     </div>
   </div>
 
-
+<!--TELL MindAR TO FIND IT-->
   <a-scene
     mindar-image="imageTargetSrc: assets/targets/targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no; filterMinCF: 0.0001; filterBeta: 0.001"
     color-space="sRGB"
@@ -92,18 +113,22 @@
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
 
+<!-- Assets library: preloads resources before scene renders -->
     <a-assets>
+      <!-- Asset: coral.glb
+           - id: "coralModel" (reference in code as #coralModel)-->
       <a-asset-item id="coralModel" src="assets/models/coral.glb"></a-asset-item>
     </a-assets>
 
+     <!-- CAMERA (USER'S PHONE CAMERA) -->
     <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse"></a-camera>
 
+    <!-- MARKER TARGET (INVISIBLE ANCHOR POINT) -->
     <a-entity id="target" mindar-image-target="targetIndex: 0">
 
-      <!-- Everything below is rotated so the scene stands up off the card
-           rather than lying flat on it. -->
-      <a-entity rotation="-90 0 0">
 
+      <a-entity rotation="-90 0 0">
+<!-- LIGHTING (3D Illumination) -->
         <a-entity light="type: ambient; color: #9FD8EA; intensity: 0.7"></a-entity>
         <a-entity light="type: directional; color: #FFFFFF; intensity: 0.85;
                  castShadow: true; shadowMapWidth: 512; shadowMapHeight: 512;
@@ -115,10 +140,7 @@
         <a-entity light="type: directional; color: #5FC6F0; intensity: 0.4" position="-0.8 0.2 -0.6"></a-entity>
         <a-entity caustic-light></a-entity>
 
-        <!-- The coral. fit-model sizes it automatically, so no
-             hand-tuned scale value is needed for a new model.
-             size is in card widths: the model stands 0.55 of the
-             printed card tall, whatever units it was exported in. -->
+       <!-- 3D CORAL MODEL -->
         <a-entity
           id="coral"
           gltf-model="#coralModel"
@@ -129,16 +151,19 @@
           class="clickable">
         </a-entity>
 
+        <!-- FISH SCHOOL (Boids Flocking System) -->
         <a-entity reef-school="count: 14; radius: 0.50; coral: 0.22; maxHeight: 0.48"></a-entity>
+         <!-- MARINE SNOW (Floating Particles) -->
         <a-entity marine-snow="count: 70; spread: 0.7; top: 0.5"></a-entity>
 
       </a-entity>
     </a-entity>
   </a-scene>
 
-  <script src="js/ambience.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/lib-reef.js"></script>
-  <script src="js/marker-scene.js"></script>
+  <!--Javascript Imports (logic & interactions)-->
+  <script src="js/ambience.js"></script>    <!--audio handling-->
+  <script src="js/ui.js"></script>          <!--user interaction-->
+  <script src="js/lib-reef.js"></script>    <!--Shared components & systems Defines custom A-Frame components-->
+  <script src="js/marker-scene.js"></script> <!--MindAR initialization & detection-->
 </body>
 </html>

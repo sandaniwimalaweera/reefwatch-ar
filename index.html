@@ -15,12 +15,6 @@
 </head>
 <body>
 
-  <!-- The water the page sits in. Purely decorative, and kept in
-       three separate layers because each one is composited
-       differently: the shafts are screened over the depth
-       gradient, the caustics are screened and masked on top of
-       those, and the particulate has to stay unmasked so it can
-       drift the full height of the viewport. -->
   <div class="watercolumn" aria-hidden="true">
     <span class="beam beam-a"></span>
     <span class="beam beam-b"></span>
@@ -36,9 +30,6 @@
     <span class="mote"></span><span class="mote"></span><span class="mote"></span>
   </div>
 
-  <!-- The ambience follows the user in from here: the preference is
-       remembered, so a reader who turns it on once has it in both
-       scenes without being asked again. -->
   <button class="ar-audio" id="audio" type="button" aria-label="Play ambience">
     <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <path d="M11 5 6 9H2v6h4l5 4z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/>
@@ -48,16 +39,6 @@
     </svg>
   </button>
 
-  <!-- Sound prompt.
-       Browsers refuse to play audio until the page has been touched
-       once, so the reef cannot fade in on load. This says so, in
-       passing, and offers the touch. It is deliberately not a gate:
-       it sits at the foot of the page, blocks nothing, and a tap
-       anywhere else starts the sound and dismisses it anyway.
-
-       Revealed by ambience.js only when the browser has actually
-       refused. Where autoplay is permitted the bed is already
-       playing and the reader never sees this. -->
   <div class="sound-pop" id="soundPop" role="region"
        aria-labelledby="soundPopTitle" hidden>
     <button class="sound-pop-close" id="soundPopClose" type="button"
@@ -147,7 +128,7 @@
       </p>
       <p class="attrib">
         Marine data from Open-Meteo, generated using data from the German Weather
-        Service (DWD), CC BY 4.0. 3D models by rkuhlf via Sketchfab, CC BY 4.0.
+        Service (DWD), CC BY 4.0. 3D models by JonathanFreire and rkuhlf via Sketchfab, CC BY 4.0.
       </p>
     </footer>
 
@@ -156,9 +137,7 @@
   <script src="js/ambience.js"></script>
   <script src="js/api.js"></script>
   <script>
-    /* The landing page shows the current reading before the user
-       enters AR, so the live-data link is visible immediately
-       rather than only once a reef has been placed. */
+
     (function () {
       var tempEl  = document.getElementById('landingTemp');
       var stateEl = document.getElementById('landingState');

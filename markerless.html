@@ -107,7 +107,8 @@
       </p>
 
       <h3>3D models</h3>
-      <p>Coral and reef models by rkuhlf, via Sketchfab, CC&nbsp;BY&nbsp;4.0.</p>
+      <p>Coral model by JonathanFreire and reef model by rkuhlf, both via
+         Sketchfab, CC&nbsp;BY&nbsp;4.0.</p>
 
       <h3>Libraries</h3>
       <p>A-Frame and MindAR, both MIT licensed.
@@ -139,11 +140,7 @@
       <a-asset-item id="reefModel" src="assets/models/reef.glb"></a-asset-item>
     </a-assets>
 
-    <!-- In a WebXR session the device supplies the pose. In the sensor
-         fallback the sensor-ar component takes the camera over and
-         drives it from DeviceOrientation itself, removing look-controls
-         for the duration of the session. Eye height is assumed so a
-         ground plane can be estimated. -->
+
     <a-camera
       position="0 1.4 0"
       look-controls="magicWindowTrackingEnabled: true; mouseEnabled: false; touchEnabled: false; pointerLockEnabled: false"
@@ -156,14 +153,8 @@
     <a-entity light="type: directional; color: #7FD8FF; intensity: 0.7" position="-1 1.5 -1"></a-entity>
     <a-entity light="type: hemisphere; color: #BFE9F5; groundColor: #2A4A55; intensity: 0.7"></a-entity>
 
-    <!-- Two tracking paths. Whichever the device supports is used;
-         see the capability check in js/xr-scene.js. -->
+  
     <a-entity id="placer" hit-test-placer="reticle: #reticle; target: #reef"></a-entity>
-    <!-- cameraFov is the assumed field of view of this phone's rear
-         lens across the long edge of the frame it delivers. No API
-         reports it. If the reef slides across the floor as the phone
-         turns, this number is wrong: raise it if the reef lags behind
-         the floor, lower it if it runs ahead. -->
     <a-entity id="sensor"
       sensor-ar="reticle: #reticle; target: #reef; eyeHeight: 1.4; cameraFov: 65"></a-entity>
 
@@ -184,10 +175,7 @@
       </a-ring>
     </a-entity>
 
-    <!-- The reef, hidden until the user taps a surface -->
     <a-entity id="reef" visible="false">
-      <!-- Contact shadow. Without it the reef reads as floating,
-           because there is no real shadow from the room's light. -->
       <a-entity contact-shadow="radius: 0.85; opacity: 0.5"></a-entity>
       <a-entity
         gltf-model="#reefModel"

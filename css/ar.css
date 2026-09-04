@@ -1,7 +1,3 @@
-/* ReefWatch AR — AR overlay chrome
-   Shared by marker.html and markerless.html.
-   Everything here floats above the camera feed, so contrast
-   and safe-area insets matter more than usual. */
 
 :root {
   --abyss:   #04212B;
@@ -41,15 +37,6 @@ html, body {
   background: transparent !important;
 }
 
-/* Camera feed (marker page only)
-   MindAR injects its own <video> for the camera stream, and on
-   iOS Safari it is left unsized behind an opaque canvas, which
-   shows as a black background with the model floating on it.
-
-   These rules are scoped to .mindar-page. The markerless page
-   gets its camera from the WebXR compositor, not a video
-   element, and forcing canvas geometry there breaks the AR
-   session's own sizing. */
 
 .mindar-page video {
   position: fixed !important;
@@ -272,6 +259,28 @@ html, body {
 }
 
 .ar-back:active { background: rgba(14, 107, 126, 0.8); }
+
+
+.ar-credits {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 3.5rem);
+  left: 0.9rem;
+  z-index: 30;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid rgba(255, 244, 234, 0.24);
+  border-radius: 999px;
+  background: rgba(4, 33, 43, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bone);
+  cursor: pointer;
+}
+
+.ar-credits:active { background: rgba(14, 107, 126, 0.8); }
 
 @media (prefers-reduced-motion: reduce) {
   .ar-scanline { animation: none; top: 50%; }
@@ -660,12 +669,6 @@ html, body {
 .sensor-feed {
   position: fixed;
   inset: 0;
-  /* Not 100vw/100vh. On iOS Safari those resolve against the large
-     viewport, which ignores the toolbar, while the canvas above is a
-     fixed inset:0 box resolving against the visual viewport. The two
-     then differ by the height of the toolbar, the feed is scaled
-     differently from the render, and the reef slides across the floor
-     as the phone turns. Percentages keep both boxes identical. */
   width: 100%;
   height: 100%;
   object-fit: cover;
